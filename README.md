@@ -1,4 +1,5 @@
 # Presidential AI Challenge 25-26
+Dominick Pelaia, Levi Dunn, Eli Ferency, and Hayden Hellstens' submission to the Presidential AI Challenge
 
 ## Project Overview
 This project is a disaster prediction and volunteering coordination portal. It integrates:
@@ -14,4 +15,3 @@ This project is a disaster prediction and volunteering coordination portal. It i
 - `app/prediction`: PyTorch models
 - `app/coordination`: Volunteering logic
 - `app/database`: Firebase interactions
-#Dominick Pelaia, Levi Dunn, Eli Ferency, and Hayden Hellstens' submission to the Presidential AI Challenge
