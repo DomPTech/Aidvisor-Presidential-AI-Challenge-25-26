@@ -6,3 +6,5 @@ langgraph
 requests
 beautifulsoup4
 chromadb
+folium
+streamlit-folium
