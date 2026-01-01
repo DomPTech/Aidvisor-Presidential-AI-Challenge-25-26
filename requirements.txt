@@ -8,3 +8,4 @@ beautifulsoup4
 chromadb
 folium
 streamlit-folium
+openai

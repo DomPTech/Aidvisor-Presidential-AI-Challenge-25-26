@@ -5,6 +5,7 @@ import folium
 from folium.plugins import HeatMap
 from streamlit_folium import folium_static
 import uuid
+from app.chatbot.chatbot import DisasterAgent
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -202,8 +203,24 @@ def main():
         st.session_state.username = None
     if 'custom_incidents' not in st.session_state:
         st.session_state.custom_incidents = []
+    if 'messages' not in st.session_state:
+        st.session_state.messages = []
+    if 'hf_api_key' not in st.session_state:
+        st.session_state.hf_api_key = ""
 
     st.set_page_config(page_title="Flooding Prediction & Coordination", layout="wide")
+
+    # API Settings in Sidebar
+    with st.sidebar:
+        st.title("Settings")
+        st.session_state.hf_api_key = st.text_input(
+            "HuggingFace API Key",
+            value=st.session_state.hf_api_key,
+            type="password",
+            help="Get your key at https://huggingface.co/settings/tokens"
+        )
+        if not st.session_state.hf_api_key:
+            st.warning("Please enter your API Key to use the Chatbot.")
 
     render_top_bar()
 
@@ -220,6 +237,30 @@ def main():
     elif current_mode == "Chatbot":
         st.header("AI Assistance Chatbot")
         st.write("The AI Chatbot interface provides rapid incident reporting and instruction assistance.")
+        
+        # Display chat messages from history on app rerun
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # React to user input
+        if prompt := st.chat_input("How can I help you today?"):
+            # Display user message in chat message container
+            st.chat_message("user").markdown(prompt)
+            # Add user message to chat history
+            st.session_state.messages.append({"role": "user", "content": prompt})
+
+            # Get agent response
+            agent = DisasterAgent(api_token=st.session_state.hf_api_key)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    # The get_response method in chatbot.py adds the user_input to messages itself
+                    # so we pass the previous history.
+                    response = agent.get_response(prompt, history=st.session_state.messages[:-1])
+                    st.markdown(response)
+            
+            # Add assistant response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
     elif current_mode == "Prediction":
         st.header("Flooding Prediction Models")
