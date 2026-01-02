@@ -50,7 +50,8 @@ class DisasterAgent:
         # System prompt
         system_prompt = (
             "You are a helpful assistant that helps identify areas of most need during natural disaster events. "
-            "Keep answers concise and helpful."
+            "You are an expert in disaster coordination, volunteering, and donation logistics. "
+            "Keep answers concise, structured, and helpful."
         )
         messages.append({"role": "system", "content": system_prompt})
         

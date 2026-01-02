@@ -8,6 +8,7 @@ import uuid
 from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.google_news import get_google_news
 from app.chatbot.tools.nws_alerts import get_nws_alerts
+from app.coordination.volunteering import get_recommendations
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -91,53 +92,120 @@ def create_folium_map():
     return m
 
 def render_volunteering_view():
-    st.header("Volunteer Coordination: Report New Resource Needs")
+    st.header("🤝 Volunteer & Donation Coordination")
     st.write(
-        "Manually enter the details of a new critical location, its required supplies, and select a relevant icon.")
+        "Input your information to receive AI-driven recommendations for areas of most concern and need of volunteer efforts or donations."
+    )
 
-    with st.form("new_incident_form", clear_on_submit=True):
-        st.subheader("Location and Needs Details")
+    # Custom CSS for a premium look
+    st.markdown("""
+        <style>
+        .stButton>button {
+            width: 100%;
+            border-radius: 5px;
+            height: 3em;
+            background-color: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        .recommendation-card {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 5px solid #007bff;
+            margin-bottom: 20px;
+        }
+        </style>
+    """, unsafe_allow_html=True)
 
-        title = st.text_input("Incident Title (e.g., House Flooding)", key='form_title')
+    col1, col2 = st.columns([1, 1])
 
-        col_lat, col_lon = st.columns(2)
-        with col_lat:
-            latitude_str = st.text_input("Latitude (e.g., 34.05)", key='form_lat')
-        with col_lon:
-            longitude_str = st.text_input("Longitude (e.g., -118.24)", key='form_lon')
+    with col1:
+        st.subheader("📋 Your Information")
+        with st.form("volunteer_info_form"):
+            location = st.text_input("Location (Address, City, or Region)", placeholder="e.g., Nashville, TN")
+            skills = st.text_area("Your Skills", placeholder="e.g., First Aid, Driving, Cooking, Data Analysis")
+            interests = st.multiselect(
+                "Interests",
+                options=["On-site Volunteering", "Remote Support", "Donations", "Coordination", "Medical Assistance"],
+                default=["On-site Volunteering"]
+            )
+            availability = st.selectbox("Availability", options=["Immediate", "This Weekend", "Next Week", "Flexible"])
+            
+            submit_info = st.form_submit_button("Get AI Recommendations")
 
-        icon_display_name = st.selectbox(
-            "Select Icon for Incident:",
-            options=list(FLOODING_ICONS.keys()),
-            key='form_icon_select'
-        )
-
-        needs = st.text_area("Required Needs (e.g., Water, Generator, Medical Staff)", key='form_needs')
-
-        submitted = st.form_submit_button("Submit New Location to Map")
-
-        if submitted:
-            try:
-                latitude = float(latitude_str)
-                longitude = float(longitude_str)
-
-                if not title or not needs:
-                    st.error("Please fill in the Title and Required Needs.")
-                elif not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
-                    st.error("Invalid Latitude/Longitude range.")
+            if submit_info:
+                if not location:
+                    st.error("Please provide your location.")
                 else:
-                    st.session_state.custom_incidents.append({
-                        "Title": title,
-                        "Latitude": latitude,
-                        "Longitude": longitude,
-                        "Needs": needs,
-                        "Icon": FLOODING_ICONS[icon_display_name],  # Store the actual Font Awesome code
-                        "id": str(uuid.uuid4())
-                    })
-                    st.success(f"Location '{title}' submitted and marked with icon '{icon_display_name}'.")
+                    user_info = {
+                        "location": location,
+                        "skills": skills,
+                        "interests": ", ".join(interests),
+                        "availability": availability
+                    }
+                    with st.spinner("Generating recommendations..."):
+                        recommendation = get_recommendations(user_info, st.session_state.hf_api_key)
+                        st.session_state.volunteer_recommendation = recommendation
+                        st.success("Recommendations generated!")
 
-            except ValueError:
-                st.error("Latitude and Longitude must be valid numbers.")
+    with col2:
+        st.subheader("💡 AI Recommendations")
+        if 'volunteer_recommendation' in st.session_state and st.session_state.volunteer_recommendation:
+            st.markdown(f"""
+                {st.session_state.volunteer_recommendation}
+            """)
+        else:
+            st.info("Fill out the form on the left to see personalized recommendations.")
+
+    st.write("---")
+    st.subheader("📍 Report New Resource Needs")
+    st.write("Manually enter the details of a new critical location, its required supplies, and select a relevant icon.")
+
+    with st.expander("Show/Hide Reporting Form"):
+        with st.form("new_incident_form", clear_on_submit=True):
+            st.subheader("Location and Needs Details")
+
+            title = st.text_input("Incident Title (e.g., House Flooding)", key='form_title')
+
+            col_lat, col_lon = st.columns(2)
+            with col_lat:
+                latitude_str = st.text_input("Latitude (e.g., 34.05)", key='form_lat')
+            with col_lon:
+                longitude_str = st.text_input("Longitude (e.g., -118.24)", key='form_lon')
+
+            icon_display_name = st.selectbox(
+                "Select Icon for Incident:",
+                options=list(FLOODING_ICONS.keys()),
+                key='form_icon_select'
+            )
+
+            needs = st.text_area("Required Needs (e.g., Water, Generator, Medical Staff)", key='form_needs')
+
+            submitted = st.form_submit_button("Submit New Location to Map")
+
+            if submitted:
+                try:
+                    latitude = float(latitude_str)
+                    longitude = float(longitude_str)
+
+                    if not title or not needs:
+                        st.error("Please fill in the Title and Required Needs.")
+                    elif not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                        st.error("Invalid Latitude/Longitude range.")
+                    else:
+                        st.session_state.custom_incidents.append({
+                            "Title": title,
+                            "Latitude": latitude,
+                            "Longitude": longitude,
+                            "Needs": needs,
+                            "Icon": FLOODING_ICONS[icon_display_name],  # Store the actual Font Awesome code
+                            "id": str(uuid.uuid4())
+                        })
+                        st.success(f"Location '{title}' submitted and marked with icon '{icon_display_name}'.")
+
+                except ValueError:
+                    st.error("Latitude and Longitude must be valid numbers.")
 
     st.write("---")
 
