@@ -6,6 +6,8 @@ from folium.plugins import HeatMap
 from streamlit_folium import folium_static
 import uuid
 from app.chatbot.chatbot import DisasterAgent
+from app.chatbot.tools.google_news import get_google_news
+from app.chatbot.tools.nws_alerts import get_nws_alerts
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -251,7 +253,11 @@ def main():
             st.session_state.messages.append({"role": "user", "content": prompt})
 
             # Get agent response
-            agent = DisasterAgent(api_token=st.session_state.hf_api_key)
+            tools = {
+                "get_google_news": get_google_news,
+                "get_nws_alerts": get_nws_alerts
+            }
+            agent = DisasterAgent(api_token=st.session_state.hf_api_key, tools=tools)
             with st.chat_message("assistant"):
                 with st.spinner("Thinking..."):
                     # The get_response method in chatbot.py adds the user_input to messages itself
