@@ -49,9 +49,7 @@ class DisasterAgent:
         
         # System prompt
         system_prompt = (
-            "You are a helpful assistant for a Flash Flood Prediction Application. "
-            "The app helps users check flood probability at USGS sites based on streamflow data. "
-            "Answer questions about floods, safety, and how to interpret risk levels (Low < 30%, Moderate < 70%, High >= 70%). "
+            "You are a helpful assistant that helps identify areas of most need during natural disaster events. "
             "Keep answers concise and helpful."
         )
         messages.append({"role": "system", "content": system_prompt})
@@ -99,17 +97,38 @@ class DisasterAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "get_flood_news",
-                    "description": "Get recent flash flood news for a specific location.",
+                    "name": "get_google_news",
+                    "description": "Get recent flash flood news for a specific location or search query.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "location_query": {
+                            "query": {
                                 "type": "string",
-                                "description": "The location to search for news (e.g., 'Nashville, TN')."
+                                "description": "The search query or location to search for news (e.g., 'Nashville flood')."
                             }
                         },
-                        "required": ["location_query"] 
+                        "required": ["query"] 
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_nws_alerts",
+                    "description": "Get active weather alerts from the National Weather Service for a specific latitude and longitude.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lat": {
+                                "type": "number",
+                                "description": "Latitude of the location."
+                            },
+                            "lon": {
+                                "type": "number",
+                                "description": "Longitude of the location."
+                            }
+                        },
+                        "required": ["lat", "lon"] 
                     }
                 }
             }
@@ -183,7 +202,15 @@ class DisasterAgent:
         return cleaned_content.strip()
 
 if __name__ == "__main__":
-    # Simple test
-    # Ensure HF_TOKEN is set in env for this test to work
-    bot = HuggingFaceChatbot()
-    print(bot.get_response("What is a flash flood?"))
+    # Test with tools
+    from app.chatbot.tools.google_news import get_google_news
+    from app.chatbot.tools.nws_alerts import get_nws_alerts
+    
+    test_tools = {
+        "get_google_news": get_google_news,
+        "get_nws_alerts": get_nws_alerts
+    }
+    
+    bot = DisasterAgent(tools=test_tools)
+    print(bot.get_response("Are there any weather alerts for Nashville (36.16, -86.78)?"))
+    print(bot.get_response("What is the latest news on floods in Tennessee?"))
