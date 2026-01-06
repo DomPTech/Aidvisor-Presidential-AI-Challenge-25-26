@@ -11,6 +11,7 @@ import os
 from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.google_news import get_google_news
 from app.chatbot.tools.nws_alerts import get_nws_alerts
+from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 from app.coordination.volunteering import get_recommendations
 
 FLOODING_ICONS = {
@@ -268,7 +269,12 @@ def main():
             st.chat_message("user").markdown(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
             agent = DisasterAgent(api_token=st.session_state.hf_api_key,
-                                  tools={"get_google_news": get_google_news, "get_nws_alerts": get_nws_alerts})
+                                  tools={
+                                      "get_google_news": get_google_news, 
+                                      "get_nws_alerts": get_nws_alerts,
+                                      "get_fema_disaster_declarations": get_fema_disaster_declarations,
+                                      "get_fema_assistance_data": get_fema_assistance_data
+                                  })
             with st.chat_message("assistant"):
                 res = agent.get_response(prompt, history=st.session_state.messages[:-1])
                 st.markdown(res)
