@@ -11,6 +11,7 @@ import os
 from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.google_news import get_google_news
 from app.chatbot.tools.nws_alerts import get_nws_alerts
+from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 from app.coordination.volunteering import get_recommendations
 
 FLOODING_ICONS = {
@@ -119,7 +120,7 @@ def render_volunteering_view():
                         user_info = {"location": location, "comments": comments, "interests": ", ".join(interests),
                                      "availability": f"{sel_date} at {sel_time}"}
                         with st.spinner("Generating..."):
-                            rec = get_recommendations(user_info, st.session_state.hf_api_key)
+                            rec = get_recommendations(user_info, st.session_state.hf_api_key, st.session_state.hf_model_id)
                             st.session_state.volunteer_recommendation = rec
                             st.rerun()
 
@@ -251,12 +252,13 @@ def render_top_bar():
 
 def main():
     for key, val in [('app_mode', 'Map View'), ('logged_in', False), ('username', None), ('messages', []),
-                     ('hf_api_key', '')]:
+                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1')]:
         if key not in st.session_state: st.session_state[key] = val
     st.set_page_config(page_title="Flooding Coordination", layout="wide")
     with st.sidebar:
         st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
                                                     type="password")
+        st.session_state.hf_model_id = st.text_input("HuggingFace Model ID", value=st.session_state.hf_model_id)
     render_top_bar()
     mode = st.session_state.app_mode
     if mode == "Map View":
@@ -267,8 +269,14 @@ def main():
         if prompt := st.chat_input("Help?"):
             st.chat_message("user").markdown(prompt)
             st.session_state.messages.append({"role": "user", "content": prompt})
-            agent = DisasterAgent(api_token=st.session_state.hf_api_key,
-                                  tools={"get_google_news": get_google_news, "get_nws_alerts": get_nws_alerts})
+            agent = DisasterAgent(model_id=st.session_state.hf_model_id,
+                                  api_token=st.session_state.hf_api_key,
+                                  tools={
+                                      "get_google_news": get_google_news, 
+                                      "get_nws_alerts": get_nws_alerts,
+                                      "get_fema_disaster_declarations": get_fema_disaster_declarations,
+                                      "get_fema_assistance_data": get_fema_assistance_data
+                                  })
             with st.chat_message("assistant"):
                 res = agent.get_response(prompt, history=st.session_state.messages[:-1])
                 st.markdown(res)

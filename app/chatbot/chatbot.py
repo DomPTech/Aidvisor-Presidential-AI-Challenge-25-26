@@ -3,7 +3,7 @@ from openai import OpenAI
 import json
 
 class DisasterAgent:
-    def __init__(self, model_id="deepseek-ai/DeepSeek-R1-0528", api_token=None, tools=None):
+    def __init__(self, model_id="deepseek-ai/DeepSeek-R1", api_token=None, tools=None):
         """
         Initialize the HuggingFace Chatbot using the OpenAI client.
         
@@ -51,6 +51,10 @@ class DisasterAgent:
         system_prompt = (
             "You are a helpful assistant that helps identify areas of most need during natural disaster events. "
             "You are an expert in disaster coordination, volunteering, and donation logistics. "
+            "IMPORTANT: Always search for data using the provided tools (OpenFEMA, Google News, NWS Alerts) "
+            "before making claims about specific community needs or disaster status. "
+            "If you do not have data from a tool for a specific inquiry about a location's needs, "
+            "clearly state that you don't have that information instead of speculating or fabricating needs. "
             "Keep answers concise, structured, and helpful."
         )
         messages.append({"role": "system", "content": system_prompt})
@@ -64,37 +68,7 @@ class DisasterAgent:
         messages.append({"role": "user", "content": user_input})
         
         # Define tools schema
-        # We only have one tool for now, but we can expand this
         tools_schema = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_flood_probability",
-                    "description": "Get the probability of a flood for a specific location.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "site_code": {
-                                "type": "string",
-                                "description": "The USGS site code (e.g., '03432400')."
-                            },
-                            "lat": {
-                                "type": "number",
-                                "description": "Latitude of the location."
-                            },
-                            "lon": {
-                                "type": "number",
-                                "description": "Longitude of the location."
-                            },
-                            "site_name": {
-                                "type": "string",
-                                "description": "Name of the site or location."
-                            }
-                        },
-                        "required": [] 
-                    }
-                }
-            },
             {
                 "type": "function",
                 "function": {
@@ -132,6 +106,52 @@ class DisasterAgent:
                         "required": ["lat", "lon"] 
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_fema_disaster_declarations",
+                    "description": "Get recent FEMA disaster declarations for a specific state and optionally a county.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "state": {
+                                "type": "string",
+                                "description": "The two-letter state abbreviation (e.g., 'TN')."
+                            },
+                            "county": {
+                                "type": "string",
+                                "description": "The county name (e.g., 'Davidson')."
+                            },
+                            "days": {
+                                "type": "integer",
+                                "description": "Number of days to look back (default is 365)."
+                            }
+                        },
+                        "required": ["state"] 
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_fema_assistance_data",
+                    "description": "Get summary data for FEMA Individual Assistance approved in a state/county to gauge community need.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "state": {
+                                "type": "string",
+                                "description": "The two-letter state abbreviation (e.g., 'TN')."
+                            },
+                            "county": {
+                                "type": "string",
+                                "description": "The county name (e.g., 'Davidson')."
+                            }
+                        },
+                        "required": ["state"] 
+                    }
+                }
             }
         ]
         
@@ -155,12 +175,28 @@ class DisasterAgent:
                 # Process each tool call
                 for tool_call in response_message.tool_calls:
                     function_name = tool_call.function.name
-                    function_args = json.loads(tool_call.function.arguments)
+                    raw_args = tool_call.function.arguments
                     
+                    try:
+                        function_args = self._safe_json_loads(raw_args)
+                    except Exception as json_err:
+                        print(f"Error parsing tool arguments for {function_name}: {json_err}")
+                        print(f"Raw arguments: {raw_args}")
+                        messages.append({
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": f"Error: Invalid JSON arguments returned by model for tool '{function_name}'.",
+                        })
+                        continue
+
                     if function_name in self.tools:
                         # Execute tool
                         tool_func = self.tools[function_name]
-                        tool_result = tool_func(**function_args)
+                        try:
+                            tool_result = tool_func(**function_args)
+                        except Exception as tool_err:
+                            tool_result = f"Error executing tool: {str(tool_err)}"
                         
                         # Add tool result to messages
                         messages.append({
@@ -182,25 +218,47 @@ class DisasterAgent:
                 final_completion = self.client.chat.completions.create(
                     model=self.model_id,
                     messages=messages,
-                    max_tokens=500,
+                    max_tokens=600,
                 )
                 return self._clean_response(final_completion.choices[0].message.content)
             
             return self._clean_response(response_message.content)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return f"Error connecting to chatbot: {str(e)}"
+
+    def _safe_json_loads(self, s):
+        """
+        Attempt to parse JSON while handling potential extra data from reasoning models.
+        """
+        if not s:
+            return {}
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            # Common issue with reasoning models: JSON followed by <think> or other text
+            import re
+            # Extract anything between the first { and the last }
+            match = re.search(r'(\{.*\})', s, re.DOTALL)
+            if match:
+                try:
+                    return json.loads(match.group(1))
+                except:
+                    pass
+            raise
 
     def _clean_response(self, content):
         """
-        Remove <think>...</think> tags from the response content.
+        Remove <think>...</think> tags and clean up the response.
         """
         if not content:
             return ""
         import re
-        # Remove <think>...</think> blocks, including newlines
-        cleaned_content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
-        return cleaned_content.strip()
+        # Remove reasoning blocks
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        return content.strip()
 
 if __name__ == "__main__":
     # Test with tools
