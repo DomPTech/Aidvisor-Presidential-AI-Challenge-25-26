@@ -13,6 +13,8 @@ from app.chatbot.tools.ddg_search import get_news_search, get_search
 from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 from app.coordination.volunteering import get_recommendations
+from app.prediction.scanner import DisasterScanner
+from app.prediction.geospatial import fill_global_grid, get_h3_geojson
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -79,12 +81,33 @@ def create_folium_map():
             icon=folium.Icon(color='orange', icon=selected_icon_name, prefix='fa')
         ).add_to(m)
 
-    np.random.seed(42)
-    num_heatmap_points = 0
-    low_priority_lat = np.random.normal(initial_location[0], 5, num_heatmap_points)
-    low_priority_lon = np.random.normal(initial_location[1], 10, num_heatmap_points)
-    heatmap_data = [[lat, lon, 1] for lat, lon in zip(low_priority_lat, low_priority_lon)]
-    HeatMap(data=heatmap_data, radius=18, blur=18, gradient={0.2: 'blue', 0.8: 'red'}).add_to(m)
+    # Add Global H3 Heatmap Layer
+    # Add Global H3 Heatmap Layer (Unconditional)
+    scan_results = st.session_state.scan_results if "scan_results" in st.session_state else []
+    
+    # Pass data as JSON for caching compatibility
+    scan_results_json = json.dumps(scan_results)
+    filled_cells = fill_global_grid(scan_results_json, resolution=3)
+    
+    # fill_global_grid returns a list, we need to pass it as JSON to get_h3_geojson
+    filled_cells_json = json.dumps(filled_cells)
+    geojson_data = get_h3_geojson(filled_cells_json)
+    
+    folium.GeoJson(
+        geojson_data,
+        name="Predictive Disaster Heatmap",
+        style_function=lambda x: {
+            "fillColor": x["properties"]["fill_color"],
+            "color": "white",
+            "weight": 0.5,
+            "fillOpacity": 0.6
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=["location", "severity", "disaster"],
+            aliases=["Nearest Location:", "Predicted Severity:", "Nearest Report:"],
+            localize=True
+        )
+    ).add_to(m)
 
     return m
 
@@ -373,16 +396,53 @@ def render_top_bar():
 
 def main():
     for key, val in [('app_mode', 'Map View'), ('logged_in', False), ('username', None), ('messages', []),
-                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1')]:
+                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1'), ('scan_results', [])]:
         if key not in st.session_state: st.session_state[key] = val
     st.set_page_config(page_title="Flooding Coordination", layout="wide")
     with st.sidebar:
         st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
                                                     type="password")
     render_top_bar()
+
+    # Automatic Global Scan on Startup
+    if not st.session_state.scan_results:
+        with st.spinner("Analyzing US disaster trends with BERT..."):
+            try:
+                # Broad queries for broad coverage
+                queries = [
+                    "active natural disasters US", 
+                    "major emergency emergency weather alerts", 
+                    "wildfire reports California Tennessee Texas",
+                    "flood warning Nashville Chicago",
+                    "storm damage Florida North Carolina"
+                ]
+                all_texts = []
+                for q in queries:
+                    all_texts.extend([line.strip() for line in get_news_search(q).split("\n\n") if line.strip()])
+                
+                # Deduplicate
+                all_texts = list(set(all_texts))
+                
+                scanner = DisasterScanner()
+                results = scanner.scan_texts(all_texts)
+                if results:
+                    st.session_state.scan_results = results
+                    st.success(f"BERT Scan complete: Identified {len(results)} localized disaster events.")
+                else:
+                    st.info("BERT Scan complete: No specific disaster locations found in current news.")
+            except Exception as e:
+                st.error(f"Automatic scan failed: {e}")
+
     mode = st.session_state.app_mode
     if mode == "Map View":
-        st_folium(create_folium_map(), width=1000, height=600)
+        if st.session_state.scan_results:
+            st.info(f"🟢 Latest BERT Scan found {len(st.session_state.scan_results)} disaster-related events.")
+        else:
+            st.warning("🟠 Latest BERT Scan found 0 localized events. Heatmap will show base state.")
+            
+        # Using a key that changes when scan_results changes to force re-render
+        map_key = f"map_{len(st.session_state.scan_results)}"
+        st_folium(create_folium_map(), width=1000, height=600, key=map_key)
     elif mode == "Chatbot":
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -403,7 +463,43 @@ def main():
                 st.markdown(res)
             st.session_state.messages.append({"role": "assistant", "content": res})
     elif mode == "Prediction":
-        st.header("Prediction Models")
+        st.header("🔍 Real-time Disaster Scanning")
+        st.write("Scan recent news and weather alerts using local BERT model to identify severity and locations.")
+        
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            scan_query = st.text_input("Search Location/Topic for Scan", value="Flooding in Tennessee")
+            if st.button("🚀 Start Deep Scan"):
+                with st.spinner("Fetching data and running BERT analysis..."):
+                    # 1. Fetch data from tools
+                    recent_news = get_news_search(scan_query)
+                    # For demo purposes, we scan the results of the news search
+                    # In a more advanced version, we could also fetch NWS alerts for specific coordinates
+                    
+                    # 2. Extract texts to scan
+                    texts_to_scan = [line.strip() for line in recent_news.split("\n\n") if line.strip()]
+                    
+                    # 3. Instantiate Local Scanner
+                    scanner = DisasterScanner()
+                    results = scanner.scan_texts(texts_to_scan)
+                    
+                    if results:
+                        st.session_state.scan_results = results
+                        st.success(f"Scan complete! Found {len(results)} relevant incidents with coordinates.")
+                        for res in results[:3]:
+                            st.info(f"📍 Found {res['severity']} severity alert at ({res['lat']}, {res['lon']})")
+                    else:
+                        st.warning("Scan complete, but no specific coordinates could be extracted from the texts.")
+        
+        if st.session_state.scan_results:
+            st.divider()
+            st.subheader("📊 Scan Results")
+            df = pd.DataFrame(st.session_state.scan_results)
+            st.dataframe(df[["severity", "lat", "lon", "text"]], use_container_width=True)
+            
+            if st.button("🗺️ View on Map"):
+                st.session_state.app_mode = "Map View"
+                st.rerun()
     elif mode == "Volunteering":
         render_volunteering_view()
     elif mode == "Groups":

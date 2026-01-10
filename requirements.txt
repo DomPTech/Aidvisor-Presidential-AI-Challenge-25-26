@@ -9,4 +9,8 @@ chromadb
 folium
 streamlit-folium
 openai
-ddgs
+duckduckgo-search
+h3
+geopy
+certifi
+geotext
