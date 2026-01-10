@@ -9,3 +9,4 @@ chromadb
 folium
 streamlit-folium
 openai
+ddgs

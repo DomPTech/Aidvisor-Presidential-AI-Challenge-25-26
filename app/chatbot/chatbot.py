@@ -51,7 +51,7 @@ class DisasterAgent:
         system_prompt = (
             "You are a helpful assistant that helps identify areas of most need during natural disaster events. "
             "You are an expert in disaster coordination, volunteering, and donation logistics. "
-            "IMPORTANT: Always search for data using the provided tools (OpenFEMA, Google News, NWS Alerts) "
+            "IMPORTANT: Always search for data using the provided tools (OpenFEMA, DuckDuckGo Search, NWS Alerts) "
             "before making claims about specific community needs or disaster status. "
             "If you do not have data from a tool for a specific inquiry about a location's needs, "
             "clearly state that you don't have that information instead of speculating or fabricating needs. "
@@ -72,14 +72,31 @@ class DisasterAgent:
             {
                 "type": "function",
                 "function": {
-                    "name": "get_google_news",
-                    "description": "Get recent flash flood news for a specific location or search query.",
+                    "name": "get_search",
+                    "description": "General web search using DuckDuckGo.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "query": {
                                 "type": "string",
-                                "description": "The search query or location to search for news (e.g., 'Nashville flood')."
+                                "description": "The search query."
+                            }
+                        },
+                        "required": ["query"] 
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_news_search",
+                    "description": "Search DuckDuckGo News for recent news and information.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query (e.g., 'Nashville flood news')."
                             }
                         },
                         "required": ["query"] 
@@ -262,11 +279,12 @@ class DisasterAgent:
 
 if __name__ == "__main__":
     # Test with tools
-    from app.chatbot.tools.google_news import get_google_news
+    from app.chatbot.tools.ddg_search import get_search, get_news_search
     from app.chatbot.tools.nws_alerts import get_nws_alerts
     
     test_tools = {
-        "get_google_news": get_google_news,
+        "get_search": get_search,
+        "get_news_search": get_news_search,
         "get_nws_alerts": get_nws_alerts
     }
     

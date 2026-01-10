@@ -1,5 +1,5 @@
 from app.chatbot.chatbot import DisasterAgent
-from app.chatbot.tools.google_news import get_google_news
+from app.chatbot.tools.ddg_search import get_news_search
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 
 def get_volunteer_opportunities():
@@ -16,7 +16,7 @@ def get_recommendations(user_info, hf_api_key, hf_model_id="deepseek-ai/DeepSeek
         return "Please provide a HuggingFace API Key in the settings sidebar to get recommendations."
     
     tools = {
-        "get_google_news": get_google_news,
+        "get_news_search": get_news_search,
         "get_fema_disaster_declarations": get_fema_disaster_declarations,
         "get_fema_assistance_data": get_fema_assistance_data
     }

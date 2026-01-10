@@ -9,7 +9,7 @@ import datetime
 import json
 import os
 from app.chatbot.chatbot import DisasterAgent
-from app.chatbot.tools.google_news import get_google_news
+from app.chatbot.tools.ddg_search import get_news_search, get_search
 from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 from app.coordination.volunteering import get_recommendations
@@ -272,7 +272,8 @@ def main():
             agent = DisasterAgent(model_id=st.session_state.hf_model_id,
                                   api_token=st.session_state.hf_api_key,
                                   tools={
-                                      "get_google_news": get_google_news, 
+                                      "get_search": get_search,
+                                      "get_news_search": get_news_search, 
                                       "get_nws_alerts": get_nws_alerts,
                                       "get_fema_disaster_declarations": get_fema_disaster_declarations,
                                       "get_fema_assistance_data": get_fema_assistance_data
