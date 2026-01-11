@@ -1,6 +1,7 @@
 streamlit
 firebase-admin
 torch
+transformers
 langchain
 langgraph
 requests
@@ -14,3 +15,7 @@ h3
 geopy
 certifi
 geotext
+geopandas
+shapely
+pyogrio
+pydeck

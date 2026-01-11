@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import folium
-from folium.plugins import HeatMap
-from streamlit_folium import st_folium
+import pydeck as pdk
 import uuid
 import datetime
 import json
@@ -14,7 +12,8 @@ from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
 from app.coordination.volunteering import get_recommendations
 from app.prediction.scanner import DisasterScanner
-from app.prediction.geospatial import fill_global_grid, get_h3_geojson
+from app.prediction.geospatial import fill_global_grid, get_h3_geojson, get_h3_location_bundles
+import h3
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -26,6 +25,7 @@ FLOODING_ICONS = {
 }
 
 DB_FILE = "data.json"
+SCAN_CACHE_FILE = "scan_cache.json"
 
 
 def load_data():
@@ -54,6 +54,28 @@ def save_data(data):
         json.dump(data, f)
 
 
+def load_scan_cache():
+    if os.path.exists(SCAN_CACHE_FILE):
+        try:
+            with open(SCAN_CACHE_FILE, "r") as f:
+                cache = json.load(f)
+                if "scan_results" in cache and "last_scan_time" in cache:
+                    cache["last_scan_time"] = datetime.datetime.fromisoformat(cache["last_scan_time"])
+                    return cache
+        except:
+            pass
+    return {"scan_results": [], "last_scan_time": None}
+
+
+def save_scan_cache(scan_results, last_scan_time):
+    cache = {
+        "scan_results": scan_results,
+        "last_scan_time": last_scan_time.isoformat() if last_scan_time else None
+    }
+    with open(SCAN_CACHE_FILE, "w") as f:
+        json.dump(cache, f)
+
+
 def get_badge(username):
     data = load_data()
     user_info = data["users"].get(username, {})
@@ -66,51 +88,101 @@ def get_badge(username):
     return "🌱 New Member"
 
 
-def create_folium_map():
-    initial_location = [39.8283, -98.5795]
-    m = folium.Map(location=initial_location, zoom_start=4, tiles="cartodbpositron")
-
+def create_pydeck_map(scan_results=None):
+    """
+    Creates a Pydeck map with a heatmap layer and picker layer for incidents.
+    """
+    if scan_results is None:
+        scan_results = st.session_state.get("scan_results", [])
+    
+    # Prepare Heatmap & Interaction Data
+    heatmap_data = []
+    for res in scan_results:
+        entry = {
+            "weight": res.get("severity", 0),
+            "name": res.get("location", "Unknown Location"),
+            "needs": res.get("text", "No detailed report available.")
+        }
+        if "cell" in res:
+            try:
+                lat, lon = h3.cell_to_latlng(res["cell"])
+                entry.update({"lat": lat, "lon": lon})
+                heatmap_data.append(entry)
+            except:
+                pass
+        elif "lat" in res and "lon" in res:
+            entry.update({"lat": res["lat"], "lon": res["lon"]})
+            heatmap_data.append(entry)
+    
+    # Prepare Incident Data
     data = load_data()
+    incident_data = []
     for incident in data.get("locations", []):
-        selected_icon_name = incident.get('Icon', "map-pin")
-        requester = incident.get('User', 'Anonymous')
-        folium.Marker(
-            location=[incident['Latitude'], incident['Longitude']],
-            popup=f"<b>{incident['Title']}</b><hr>Needs: {incident['Needs']}<br>User: {requester}",
-            tooltip=incident['Title'],
-            icon=folium.Icon(color='orange', icon=selected_icon_name, prefix='fa')
-        ).add_to(m)
-
-    # Add Global H3 Heatmap Layer
-    # Add Global H3 Heatmap Layer (Unconditional)
-    scan_results = st.session_state.scan_results if "scan_results" in st.session_state else []
+        incident_data.append({
+            "lat": incident["Latitude"],
+            "lon": incident["Longitude"],
+            "name": incident["Title"],
+            "needs": incident["Needs"]
+        })
     
-    # Pass data as JSON for caching compatibility
-    scan_results_json = json.dumps(scan_results)
-    filled_cells = fill_global_grid(scan_results_json, resolution=3)
+    # Define Layers
+    layers = []
+    if heatmap_data:
+        df_heatmap = pd.DataFrame(heatmap_data)
+        
+        # Visual Heatmap Layer (for gradient effect)
+        layers.append(pdk.Layer(
+            "HeatmapLayer",
+            data=df_heatmap,
+            get_position=["lon", "lat"],
+            get_weight="weight",
+            radius_pixels=50,
+            intensity=1,
+            threshold=0.05,
+            pickable=False,
+        ))
+        
+        # Invisible ScatterplotLayer for tooltips (preserves individual data)
+        layers.append(pdk.Layer(
+            "ScatterplotLayer",
+            data=df_heatmap,
+            get_position=["lon", "lat"],
+            get_radius=100000,
+            get_fill_color=[255, 0, 0, 0],  # Fully transparent
+            pickable=True,
+            auto_highlight=True,
+        ))
     
-    # fill_global_grid returns a list, we need to pass it as JSON to get_h3_geojson
-    filled_cells_json = json.dumps(filled_cells)
-    geojson_data = get_h3_geojson(filled_cells_json)
+    if incident_data:
+        df_incidents = pd.DataFrame(incident_data)
+        
+        # Visible incident markers
+        layers.append(pdk.Layer(
+            "ScatterplotLayer",
+            data=df_incidents,
+            get_position=["lon", "lat"],
+            get_radius=50000,
+            get_fill_color=[255, 165, 0, 200],  # Orange
+            pickable=True,
+            auto_highlight=True,
+        ))
     
-    folium.GeoJson(
-        geojson_data,
-        name="Predictive Disaster Heatmap",
-        style_function=lambda x: {
-            "fillColor": x["properties"]["fill_color"],
-            "color": "white",
-            "weight": 0.5,
-            "fillOpacity": 0.6
-        },
-        tooltip=folium.GeoJsonTooltip(
-            fields=["location", "severity", "disaster"],
-            aliases=["Nearest Location:", "Predicted Severity:", "Nearest Report:"],
-            localize=True
-        )
-    ).add_to(m)
-
-    return m
-
+    # View State
+    view_state = pdk.ViewState(
+        latitude=39.8283,
+        longitude=-98.5795,
+        zoom=3.5,
+        pitch=30,
+    )
+    
+    return pdk.Deck(
+        layers=layers,
+        initial_view_state=view_state,
+        map_style=None,
+        tooltip={
+            "text": "Severity: {weight}\nLocation: {name}\nDetails: {needs}"
+        }
+    )
 
 def render_volunteering_view():
     st.header("🤝 Volunteer & Donation Coordination")
@@ -133,17 +205,8 @@ def render_volunteering_view():
 
         with col2:
             st.subheader("📍 Nearby Requests")
-            map_data = st_folium(create_folium_map(), width=550, height=450, key="vol_map_browse")
-            if map_data.get("last_object_clicked"):
-                lat_clicked = map_data["last_object_clicked"]["lat"]
-                lng_clicked = map_data["last_object_clicked"]["lng"]
-                for loc in data["locations"]:
-                    if np.isclose(loc["Latitude"], lat_clicked, atol=1e-4) and np.isclose(loc["Longitude"], lng_clicked,
-                                                                                          atol=1e-4):
-                        st.session_state.vol_selected_loc = loc["Title"]
-                        st.session_state.vol_selected_user = loc["User"]
-                        st.session_state.vol_selected_needs = loc["Needs"]
-                        break
+            st.pydeck_chart(create_pydeck_map())
+            st.caption("Note: Interactive selection is currently limited in Pydeck view.")
 
         if "vol_selected_loc" in st.session_state:
             target_loc_name = st.session_state.vol_selected_loc
@@ -233,12 +296,9 @@ def render_volunteering_view():
                         st.success("Request saved!")
                         st.rerun()
         with col2:
-            st.subheader("📍 Click Map to Set Location")
-            map_data = st_folium(create_folium_map(), width=550, height=450, key="vol_map_request")
-            if map_data.get("last_clicked"):
-                st.session_state.clicked_lat = map_data["last_clicked"]["lat"]
-                st.session_state.clicked_lon = map_data["last_clicked"]["lng"]
-                st.rerun()
+            st.subheader("📍 Help Location")
+            st.pydeck_chart(create_pydeck_map())
+            st.caption("Note: Location selection currently disabled in Pydeck view. Use Prediction tab for new incident scanning.")
 
     elif action_mode == "Manage My Requests":
         st.subheader("✅ Resolve Your Requests")
@@ -396,53 +456,123 @@ def render_top_bar():
 
 def main():
     for key, val in [('app_mode', 'Map View'), ('logged_in', False), ('username', None), ('messages', []),
-                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1'), ('scan_results', [])]:
+                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1'), ('scan_results', []), 
+                     ('scan_index', 0), ('scan_queries', []), ('last_scan_time', None)]:
         if key not in st.session_state: st.session_state[key] = val
+    
+    # Load cached scan data from disk on first run
+    if not st.session_state.scan_results and not st.session_state.last_scan_time:
+        cached_data = load_scan_cache()
+        st.session_state.scan_results = cached_data["scan_results"]
+        st.session_state.last_scan_time = cached_data["last_scan_time"]
+        
+        # If we loaded cached data, mark scan as complete
+        if st.session_state.scan_results:
+            st.session_state.scan_index = len(st.session_state.get("scan_queries", []))
+    
+    # Initialize scan_queries with cell-based queries if empty
+    if not st.session_state.scan_queries:
+        # Define US Bounding Box (Roughly)
+        min_lat, max_lat = 24, 50
+        min_lon, max_lon = -125, -66
+        us_outline = [(min_lat, min_lon), (max_lat, min_lon), (max_lat, max_lon), (min_lat, max_lon)]
+        polygon = h3.LatLngPoly(us_outline)
+        cells = h3.polygon_to_cells(polygon, 2)
+        
+        queries = []
+        # Add initial global query
+        queries.append({"type": "general", "query": "active natural disasters US major emergency"})
+        
+        # Resolve location bundles for all cells to enable targeted news searches
+        with st.spinner("Resolving initial location metadata..."):
+            bundles = get_h3_location_bundles(cells)
+            for bundle in bundles:
+                queries.append({"type": "cell", "bundle": bundle})
+            
+        st.session_state.scan_queries = queries
     st.set_page_config(page_title="Flooding Coordination", layout="wide")
     with st.sidebar:
         st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
                                                     type="password")
     render_top_bar()
 
-    # Automatic Global Scan on Startup
-    if not st.session_state.scan_results:
-        with st.spinner("Analyzing US disaster trends with BERT..."):
-            try:
-                # Broad queries for broad coverage
-                queries = [
-                    "active natural disasters US", 
-                    "major emergency emergency weather alerts", 
-                    "wildfire reports California Tennessee Texas",
-                    "flood warning Nashville Chicago",
-                    "storm damage Florida North Carolina"
-                ]
-                all_texts = []
-                for q in queries:
-                    all_texts.extend([line.strip() for line in get_news_search(q).split("\n\n") if line.strip()])
-                
-                # Deduplicate
-                all_texts = list(set(all_texts))
-                
-                scanner = DisasterScanner()
-                results = scanner.scan_texts(all_texts)
-                if results:
-                    st.session_state.scan_results = results
-                    st.success(f"BERT Scan complete: Identified {len(results)} localized disaster events.")
-                else:
-                    st.info("BERT Scan complete: No specific disaster locations found in current news.")
-            except Exception as e:
-                st.error(f"Automatic scan failed: {e}")
+    # Containers for persistent UI
+    scan_status_container = st.empty()
+    map_container = st.empty()
 
     mode = st.session_state.app_mode
     if mode == "Map View":
-        if st.session_state.scan_results:
-            st.info(f"🟢 Latest BERT Scan found {len(st.session_state.scan_results)} disaster-related events.")
-        else:
-            st.warning("🟠 Latest BERT Scan found 0 localized events. Heatmap will show base state.")
+        # Render initial map immediately
+        map_container.pydeck_chart(create_pydeck_map())
+
+        # Check if cache is valid (less than 30 minutes old)
+        cache_valid = False
+        if st.session_state.last_scan_time:
+            time_since_scan = datetime.datetime.now() - st.session_state.last_scan_time
+            cache_valid = time_since_scan.total_seconds() < 1800  # 30 minutes = 1800 seconds
             
-        # Using a key that changes when scan_results changes to force re-render
-        map_key = f"map_{len(st.session_state.scan_results)}"
-        st_folium(create_folium_map(), width=1000, height=600, key=map_key)
+            if cache_valid:
+                with st.sidebar:
+                    st.divider()
+                    st.success("✅ Using cached scan data")
+                    minutes_ago = int(time_since_scan.total_seconds() / 60)
+                    st.caption(f"Last scanned {minutes_ago} minutes ago")
+                    next_scan = 30 - minutes_ago
+                    st.caption(f"Next scan in ~{next_scan} minutes")
+                    if st.button("🔄 Force Rescan Now"):
+                        st.session_state.scan_index = 0
+                        st.session_state.scan_results = []
+                        st.session_state.last_scan_time = None
+                        st.rerun()
+
+        # Automatic Background Scan (only if cache is invalid)
+        if not cache_valid and st.session_state.scan_index < len(st.session_state.scan_queries):
+            scanner = DisasterScanner()
+            
+            with st.sidebar:
+                st.divider()
+                st.subheader("Background Scanning...")
+                progress_bar = st.progress(st.session_state.scan_index / len(st.session_state.scan_queries))
+                status_text = st.empty()
+                if st.button("⏹ Stop Scan"):
+                    st.session_state.scan_index = len(st.session_state.scan_queries)
+                    st.rerun()
+
+            # Starting the loop from the current index
+            start_idx = st.session_state.scan_index
+            for i in range(start_idx, len(st.session_state.scan_queries)):
+                q_item = st.session_state.scan_queries[i]
+                
+                # Update status
+                if q_item['type'] == 'general':
+                    status_text.text(f"Global: {q_item['query']}")
+                    raw_news = get_news_search(q_item['query'])
+                    texts = [line.strip() for line in raw_news.split("\n\n") if line.strip()]
+                    st.session_state.scan_results.extend(scanner.scan_texts(texts))
+                else:
+                    status_text.text(f"Cell: {q_item['bundle']['h3']}")
+                    cell_res = scanner.scan_bundle_news(q_item['bundle'])
+                    if cell_res['severity'] > 0:
+                        st.session_state.scan_results.append(cell_res)
+                
+                # Update state and progress
+                st.session_state.scan_index = i + 1
+                
+                # Deduplicate results
+                unique_res = {}
+                for r in st.session_state.scan_results:
+                    key = r.get('cell') or r.get('text')
+                    unique_res[key] = r
+                st.session_state.scan_results = list(unique_res.values())
+                
+                # Update map and progress bar live
+                map_container.pydeck_chart(create_pydeck_map())
+                progress_bar.progress((i + 1) / len(st.session_state.scan_queries))
+
+            status_text.success("Initial Scan Complete")
+            st.session_state.last_scan_time = datetime.datetime.now()
+            save_scan_cache(st.session_state.scan_results, st.session_state.last_scan_time)
+
     elif mode == "Chatbot":
         for msg in st.session_state.messages:
             with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -471,20 +601,20 @@ def main():
             scan_query = st.text_input("Search Location/Topic for Scan", value="Flooding in Tennessee")
             if st.button("🚀 Start Deep Scan"):
                 with st.spinner("Fetching data and running BERT analysis..."):
-                    # 1. Fetch data from tools
+                    # Fetch data from tools
                     recent_news = get_news_search(scan_query)
-                    # For demo purposes, we scan the results of the news search
-                    # In a more advanced version, we could also fetch NWS alerts for specific coordinates
                     
-                    # 2. Extract texts to scan
+                    # Extract texts to scan
                     texts_to_scan = [line.strip() for line in recent_news.split("\n\n") if line.strip()]
                     
-                    # 3. Instantiate Local Scanner
+                    # Instantiate Local Scanner
                     scanner = DisasterScanner()
                     results = scanner.scan_texts(texts_to_scan)
                     
                     if results:
                         st.session_state.scan_results = results
+                        st.session_state.last_scan_time = datetime.datetime.now()
+                        save_scan_cache(st.session_state.scan_results, st.session_state.last_scan_time)
                         st.success(f"Scan complete! Found {len(results)} relevant incidents with coordinates.")
                         for res in results[:3]:
                             st.info(f"📍 Found {res['severity']} severity alert at ({res['lat']}, {res['lon']})")
@@ -495,7 +625,9 @@ def main():
             st.divider()
             st.subheader("📊 Scan Results")
             df = pd.DataFrame(st.session_state.scan_results)
-            st.dataframe(df[["severity", "lat", "lon", "text"]], use_container_width=True)
+            # Display available columns dynamically
+            display_cols = [col for col in ["severity", "lat", "lon", "location", "text"] if col in df.columns]
+            st.dataframe(df[display_cols] if display_cols else df, use_container_width=True)
             
             if st.button("🗺️ View on Map"):
                 st.session_state.app_mode = "Map View"
