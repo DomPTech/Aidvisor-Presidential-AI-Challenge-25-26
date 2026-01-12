@@ -1,3 +1,4 @@
+from numpy import rint
 import requests
 import json
 from datetime import datetime, timedelta
@@ -16,8 +17,16 @@ def get_fema_disaster_declarations(state=None, county=None, days=360):
     if state:
         filters.append(f"state eq '{state.upper()}'")
     if county:
-        # Match 'County Name (County)' format which is common in designatedArea
-        filters.append(f"substringof('{county}', designatedArea)")
+        # Format county as 'County Name (County)' for exact match
+        if "County" in county:
+            county_name = county.replace(" County", "")
+            designated_area = f"{county_name} (County)"
+        elif "Parish" in county:
+            county_name = county.replace(" Parish", "")
+            designated_area = f"{county_name} (Parish)"
+        else:
+            designated_area = county
+        filters.append(f"designatedArea eq '{designated_area}'")
         
     filter_query = " and ".join(filters)
     url = f"{base_url}?$filter={filter_query}&$top=10&$orderby=declarationDate desc"
@@ -29,6 +38,7 @@ def get_fema_disaster_declarations(state=None, county=None, days=360):
         
         declarations = data.get('DisasterDeclarationsSummaries', [])
         if not declarations:
+            print(url)
             return f"No recent FEMA disaster declarations found for {state or ''} {county or ''}."
         
         # Deduplicate by disaster number since multiple counties can be in one declaration
