@@ -1,7 +1,22 @@
 import streamlit as st
 from app.common import load_data, save_data
+from streamlit_gsheets import GSheetsConnection
+import certifi
+import os
+
+os.environ["SSL_CERT_FILE"] = certifi.where()
 
 st.set_page_config(page_title="Flooding Coordination - Login", layout="wide")
+
+if "GOOGLE_SHEET_URL" not in st.secrets:
+    st.error("Please add your Google Sheet URL to the secrets.toml file.")
+    st.stop()
+url = st.secrets["GOOGLE_SHEET_URL"]
+
+conn = st.connection("gsheets", type=GSheetsConnection)
+
+data = conn.read(spreadsheet=url, usecols=list(range(0, 7)))
+st.dataframe(data)
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

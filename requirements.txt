@@ -21,3 +21,4 @@ pyogrio
 pydeck
 gdeltdoc
 ddgs
+st-gsheets-connection
