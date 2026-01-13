@@ -1,38 +1,43 @@
 import streamlit as st
-from app.common import load_data, save_data
-from streamlit_gsheets import GSheetsConnection
 import certifi
 import os
+from st_supabase_connection import SupabaseConnection
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
+conn = st.connection("supabase", type=SupabaseConnection)
+
 st.set_page_config(page_title="Flooding Coordination - Login", layout="wide")
-
-if "GOOGLE_SHEET_URL" not in st.secrets:
-    st.error("Please add your Google Sheet URL to the secrets.toml file.")
-    st.stop()
-url = st.secrets["GOOGLE_SHEET_URL"]
-
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-data = conn.read(spreadsheet=url, usecols=list(range(0, 7)))
-st.dataframe(data)
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
                                                 type="password")
 
 st.header("🔑 Login")
-data = load_data()
 t1, t2 = st.tabs(["Sign In", "Create Account"])
 with t2:
-    nu, npw = st.text_input("New User"), st.text_input("New Password", type="password")
-    if st.button("Register") and nu not in data["users"]:
-        data["users"][nu] = {"pw": npw, "points": 0, "history": []}
-        save_data(data);
-        st.success("Created!")
+    email = st.text_input("Email", key="signup_email")
+    password = st.text_input("Password", type="password", key="signup_password")
+    if st.button("Register"):
+        try:
+            response = conn.auth.sign_up({"email": email, "password": password})
+            if response.user:
+                st.success("Account created! You can now sign in.")
+            else:
+                st.error("Sign up failed.")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
 with t1:
-    u, p = st.text_input("User"), st.text_input("Password", type="password")
-    if st.button("Sign In") and u in data["users"] and data["users"][u]["pw"] == p:
-        st.session_state.logged_in, st.session_state.username = True, u
-        st.switch_page("main.py")
+    email = st.text_input("Email", key="signin_email")
+    password = st.text_input("Password", type="password", key="signin_password")
+    if st.button("Sign In"):
+        try:
+            response = conn.auth.sign_in_with_password({"email": email, "password": password})
+            if response.user:
+                st.session_state.logged_in = True
+                st.session_state.username = response.user.email
+                st.switch_page("pages/8_Profile.py")
+            else:
+                st.error("Sign in failed.")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")

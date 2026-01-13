@@ -51,7 +51,7 @@ def main():
         st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
                                                     type="password")
 
-    st.title("🌊 Flooding Portal - Map View")
+    st.title("Disaster Heatmap")
 
     # Containers for persistent UI
     scan_status_container = st.empty()

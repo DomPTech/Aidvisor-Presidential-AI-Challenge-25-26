@@ -1,5 +1,4 @@
 streamlit
-firebase-admin
 torch
 transformers
 langchain
@@ -10,7 +9,6 @@ chromadb
 folium
 streamlit-folium
 openai
-duckduckgo-search
 h3
 geopy
 certifi
@@ -21,4 +19,4 @@ pyogrio
 pydeck
 gdeltdoc
 ddgs
-st-gsheets-connection
+st-supabase-connection
