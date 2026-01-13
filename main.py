@@ -16,6 +16,10 @@ def main():
                      ('scan_index', 0), ('scan_queries', []), ('last_scan_time', None)]:
         if key not in st.session_state: st.session_state[key] = val
     
+    with st.sidebar:
+        st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
+                                                    type="password")
+
     # Load cached scan data from disk on first run
     if not st.session_state.scan_results and not st.session_state.last_scan_time:
         cached_data = load_scan_cache()
@@ -46,10 +50,6 @@ def main():
                 queries.append({"type": "cell", "bundle": bundle})
             
         st.session_state.scan_queries = queries
-
-    with st.sidebar:
-        st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
-                                                    type="password")
 
     st.title("Disaster Heatmap")
 
