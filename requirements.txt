@@ -20,3 +20,4 @@ shapely
 pyogrio
 pydeck
 gdeltdoc
+ddgs
