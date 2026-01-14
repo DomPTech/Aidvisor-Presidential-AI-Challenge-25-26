@@ -1,5 +1,7 @@
 import requests
+import streamlit as st
 
+@st.cache_data
 def get_nws_alerts(lat, lon):
     """
     Fetch active weather alerts from the National Weather Service (NWS) API for a given location.

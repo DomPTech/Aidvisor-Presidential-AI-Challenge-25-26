@@ -1,5 +1,7 @@
 from ddgs import DDGS
+import streamlit as st
 
+@st.cache_data
 def get_search(query: str) -> str:
     """
     Search DuckDuckGo for a given query and return recent results (past week).
@@ -30,6 +32,7 @@ def get_search(query: str) -> str:
     except Exception as e:
         return f"Error performing DuckDuckGo search: {str(e)}"
 
+@st.cache_data
 def get_news_search(query: str) -> str:
     """
     Search DuckDuckGo News for a given query and return recent results (past week).

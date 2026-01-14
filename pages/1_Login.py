@@ -36,6 +36,7 @@ with t1:
             if response.user:
                 st.session_state.logged_in = True
                 st.session_state.username = response.user.email
+                st.session_state.user_id = response.user.id
                 st.switch_page("pages/8_Profile.py")
             else:
                 st.error("Sign in failed.")

@@ -1,31 +1,80 @@
 import streamlit as st
 import pandas as pd
 from app.common import load_data, save_data, get_badge
+from st_supabase_connection import SupabaseConnection
+import datetime
 
 st.set_page_config(page_title="Flooding Coordination - Groups", layout="wide")
 
 with st.sidebar:
-    st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
+    st.session_state.hf_api_key = st.text_input("HuggingFace API Key", 
+                                                value=st.session_state.get("hf_api_key", ""),
                                                 type="password")
 
 st.header("👥 Groups & Messaging")
+
+# Initialize Supabase connection
+try:
+    conn = st.connection("supabase", type=SupabaseConnection)
+except Exception as e:
+    st.error(f"Failed to connect to Supabase: {e}")
+    conn = None
+
 data = load_data()
 tab1, tab2, tab3 = st.tabs(["Public Chat", "Direct Messages", "🏆 Leaderboard"])
+
 with tab1:
-    for m in data["group_messages"]:
-        with st.chat_message("user"): st.write(f"**{m['u']}** ({get_badge(m['u'])}): {m['c']}")
-    if p := st.chat_input("Message group..."):
-        data["group_messages"].append({"u": st.session_state.username or "Guest", "c": p})
-        save_data(data)
-        st.rerun()
+    if not st.session_state.get("logged_in"):
+        st.warning("You must be logged in to view and participate in the group chat.")
+        if st.button("Log In"):
+            st.switch_page("pages/1_Login.py")
+    else:
+        # Fetch messages from Supabase
+        # Schema: id, user_id, message_text, created_at
+        messages = []
+        if conn:
+            try:
+                response = conn.table("messages").select("*").order("created_at", desc=False).execute()
+                messages = response.data
+            except Exception as e:
+                st.error(f"Error fetching messages: {e}")
+
+        # Display messages
+        current_user_id = st.session_state.get("user_id")
+        
+        for m in messages:
+            msg_user_id = m.get("user_id")
+            text = m.get("message_text", "")
+            
+            is_me = (msg_user_id == current_user_id)
+            
+            # Using 'user' icon for everyone, distinguish by name/text
+            with st.chat_message("user" if is_me else "assistant"):
+                prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
+                st.markdown(f"**{prefix}**: {text}")
+
+        # Chat input
+        if prompt := st.chat_input("Message group..."):
+            if current_user_id and conn:
+                try:
+                    # created_at should be handled by default in Supabase usually, 
+                    # but if needed we can rely on server side default
+                    conn.table("messages").insert({
+                        "user_id": current_user_id,
+                        "message_text": prompt
+                    }).execute()
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to send message: {e}")
+
 with tab2:
-    me = st.session_state.username
+    me = st.session_state.get("username")
     if not me:
         st.warning("Please sign in.")
     else:
-        active_contacts = {m['from'] for m in data["dm_history"] if m['to'] == me} | {m['to'] for m in
-                                                                                      data["dm_history"] if
-                                                                                      m['from'] == me}
+        # Existing logic for Direct Messages
+        active_contacts = {m['from'] for m in data["dm_history"] if m['to'] == me} | \
+                          {m['to'] for m in data["dm_history"] if m['from'] == me}
         col_list, col_chat = st.columns([1, 2])
 
         default_index = 0
@@ -42,18 +91,22 @@ with tab2:
 
         if recipient == "New Message...":
             recipient = col_list.selectbox("Select User:", options=[u for u in data["users"].keys() if u != me])
+        
         with col_chat:
-            for msg in data["dm_history"]:
-                if (msg['from'] == me and msg['to'] == recipient):
-                    with st.chat_message("user"):
-                        st.write(msg['content'])
-                elif (msg['from'] == recipient and msg['to'] == me):
-                    with st.chat_message("assistant"):
-                        st.write(msg['content'])
-            if dm_text := st.chat_input(f"Text {recipient}..."):
-                data["dm_history"].append({"from": me, "to": recipient, "content": dm_text})
-                save_data(data)
-                st.rerun()
+            if recipient:
+                for msg in data["dm_history"]:
+                    if (msg['from'] == me and msg['to'] == recipient):
+                        with st.chat_message("user"):
+                            st.write(msg['content'])
+                    elif (msg['from'] == recipient and msg['to'] == me):
+                        with st.chat_message("assistant"):
+                            st.write(msg['content'])
+                
+                if dm_text := st.chat_input(f"Text {recipient}...", key="dm_input"):
+                    data["dm_history"].append({"from": me, "to": recipient, "content": dm_text})
+                    save_data(data)
+                    st.rerun()
+
 with tab3:
     # Filtered leaderboard to remove admin
     user_list = [{"User": uname, "Points": uinfo.get("points", 0), "Badge": get_badge(uname)}
