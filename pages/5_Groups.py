@@ -7,13 +7,12 @@ import datetime
 st.set_page_config(page_title="Flooding Coordination - Groups", layout="wide")
 
 with st.sidebar:
-    st.session_state.hf_api_key = st.text_input("HuggingFace API Key", 
+    st.session_state.hf_api_key = st.text_input("HuggingFace API Key",
                                                 value=st.session_state.get("hf_api_key", ""),
                                                 type="password")
 
 st.header("👥 Groups & Messaging")
 
-# Initialize Supabase connection
 try:
     conn = st.connection("supabase", type=SupabaseConnection)
 except Exception as e:
@@ -31,8 +30,6 @@ with tab1:
     else:
         @st.fragment(run_every=2)
         def show_messages():
-            # Fetch messages from Supabase
-            # Schema: id, user_id, message_text, created_at
             messages = []
             if conn:
                 try:
@@ -41,23 +38,21 @@ with tab1:
                 except Exception as e:
                     st.error(f"Error fetching messages: {e}")
 
-            # Display messages
             current_user_id = st.session_state.get("user_id")
-            
-            for m in messages:
-                msg_user_id = m.get("user_id")
-                text = m.get("message_text", "")
-                
-                is_me = (msg_user_id == current_user_id)
-                
-                # Using 'user' icon for everyone, distinguish by name/text
-                with st.chat_message("user" if is_me else "assistant"):
-                    prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
-                    st.markdown(f"**{prefix}**: {text}")
-        
+
+            with st.container(height=500):
+                for m in messages:
+                    msg_user_id = m.get("user_id")
+                    text = m.get("message_text", "")
+
+                    is_me = (msg_user_id == current_user_id)
+
+                    with st.chat_message("user" if is_me else "assistant"):
+                        prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
+                        st.markdown(f"**{prefix}**: {text}")
+
         show_messages()
 
-        # Chat input
         if prompt := st.chat_input("Message group..."):
             current_user_id = st.session_state.get("user_id")
             if current_user_id and conn:
@@ -71,47 +66,62 @@ with tab1:
                     st.error(f"Failed to send message: {e}")
 
 with tab2:
-    me = st.session_state.get("username")
-    if not me:
+    me_id = st.session_state.get("user_id")
+    if not me_id:
         st.warning("Please sign in.")
     else:
-        # Existing logic for Direct Messages
-        active_contacts = {m['from'] for m in data["dm_history"] if m['to'] == me} | \
-                          {m['to'] for m in data["dm_history"] if m['from'] == me}
         col_list, col_chat = st.columns([1, 2])
 
-        default_index = 0
-        open_target = st.session_state.get("dm_open_target")
+        with col_list:
+            all_users = []
+            if conn:
+                try:
+                    user_res = conn.table("profiles").select("id, username").execute()
+                    all_users = user_res.data
+                except:
+                    all_users = [{"id": k, "username": k} for k in data["users"].keys()]
 
-        options_list = list(active_contacts) + ["New Message..."]
-        if open_target and open_target in options_list:
-            default_index = options_list.index(open_target)
-        elif open_target:
-            options_list = [open_target] + options_list
-            default_index = 0
+            user_options = {u["username"]: u["id"] for u in all_users if u["id"] != me_id}
+            recipient_name = st.selectbox("Search and Select User:", options=list(user_options.keys()))
+            recipient_id = user_options.get(recipient_name)
 
-        recipient = col_list.radio("Conversations:", options=options_list, index=default_index)
-
-        if recipient == "New Message...":
-            recipient = col_list.selectbox("Select User:", options=[u for u in data["users"].keys() if u != me])
-        
         with col_chat:
-            if recipient:
-                for msg in data["dm_history"]:
-                    if (msg['from'] == me and msg['to'] == recipient):
-                        with st.chat_message("user"):
-                            st.write(msg['content'])
-                    elif (msg['from'] == recipient and msg['to'] == me):
-                        with st.chat_message("assistant"):
-                            st.write(msg['content'])
-                
-                if dm_text := st.chat_input(f"Text {recipient}...", key="dm_input"):
-                    data["dm_history"].append({"from": me, "to": recipient, "content": dm_text})
-                    save_data(data)
-                    st.rerun()
+            if recipient_id:
+                @st.fragment(run_every=2)
+                def show_dms(target_id, target_name):
+                    dm_messages = []
+                    if conn:
+                        try:
+                            res = conn.table("direct_messages").select("*").or_(
+                                f"and(sender_id.eq.{me_id},receiver_id.eq.{target_id}),"
+                                f"and(sender_id.eq.{target_id},receiver_id.eq.{me_id})"
+                            ).order("created_at", desc=False).execute()
+                            dm_messages = res.data
+                        except Exception as e:
+                            st.error(f"Error loading messages: {e}")
+
+                    with st.container(height=500):
+                        for msg in dm_messages:
+                            is_me = msg["sender_id"] == me_id
+                            with st.chat_message("user" if is_me else "assistant"):
+                                st.write(f"**{'You' if is_me else target_name}**: {msg['message_text']}")
+
+
+                show_dms(recipient_id, recipient_name)
+
+                if dm_text := st.chat_input(f"Text {recipient_name}...", key="dm_input"):
+                    if conn:
+                        try:
+                            conn.table("direct_messages").insert({
+                                "sender_id": me_id,
+                                "receiver_id": recipient_id,
+                                "message_text": dm_text
+                            }).execute()
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to send: {e}")
 
 with tab3:
-    # Filtered leaderboard to remove admin
     user_list = [{"User": uname, "Points": uinfo.get("points", 0), "Badge": get_badge(uname)}
                  for uname, uinfo in data["users"].items() if uname != "admin"]
     if user_list:
