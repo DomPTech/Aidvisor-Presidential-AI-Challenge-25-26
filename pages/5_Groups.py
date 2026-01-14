@@ -20,6 +20,18 @@ except Exception as e:
     conn = None
 
 data = load_data()
+profiles = {}
+if conn:
+    try:
+        prof_res = conn.table("profiles").select("id, first_name, last_name").execute()
+        for p in prof_res.data:
+            fn = p.get('first_name', '')
+            ln = p.get('last_name', '')
+            full = f"{fn} {ln}".strip()
+            profiles[p['id']] = full if full else None
+    except Exception as e:
+        st.error(f"Error fetching profiles: {e}")
+
 tab1, tab2, tab3 = st.tabs(["Public Chat", "Direct Messages", "Leaderboard"])
 
 with tab1:
@@ -47,8 +59,13 @@ with tab1:
 
                     is_me = (msg_user_id == current_user_id)
 
-                    with st.chat_message("user" if is_me else "assistant"):
+                    user_name = profiles.get(msg_user_id)
+                    if user_name:
+                        prefix = "You" if is_me else user_name
+                    else:
                         prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
+
+                    with st.chat_message("user" if is_me else "assistant"):
                         st.markdown(f"**{prefix}**: {text}")
 
         show_messages()
@@ -76,12 +93,21 @@ with tab2:
             all_users = []
             if conn:
                 try:
-                    user_res = conn.table("profiles").select("id, first_name").execute()
+                    user_res = conn.table("profiles").select("id, first_name, last_name").execute()
                     all_users = user_res.data
                 except:
-                    all_users = [{"id": k, "first_name": k} for k in data["users"].keys()]
+                    all_users = [{"id": k, "first_name": k, "last_name": ""} for k in data["users"].keys()]
 
-            user_options = {u["first_name"]: u["id"] for u in all_users if u["id"] != me_id}
+            user_options = {}
+            for u in all_users:
+                if u["id"] != me_id:
+                    fn = u.get('first_name', '')
+                    ln = u.get('last_name', '')
+                    full = f"{fn} {ln}".strip()
+                    if full:
+                        user_options[full] = u["id"]
+                    else:
+                        user_options[u["id"]] = u["id"]
             recipient_name = st.selectbox("Search and Select User:", options=list(user_options.keys()))
             recipient_id = user_options.get(recipient_name)
 
@@ -102,9 +128,15 @@ with tab2:
 
                     with st.container(height=500):
                         for msg in dm_messages:
-                            is_me = msg["sender_id"] == me_id
+                            sender_id = msg["sender_id"]
+                            is_me = sender_id == me_id
+                            sender_name = profiles.get(sender_id)
+                            if sender_name:
+                                prefix = "You" if is_me else sender_name
+                            else:
+                                prefix = "You" if is_me else f"User {sender_id[:6]}"
                             with st.chat_message("user" if is_me else "assistant"):
-                                st.write(f"**{'You' if is_me else target_name}**: {msg['message_text']}")
+                                st.write(f"**{prefix}**: {msg['message_text']}")
 
 
                 show_dms(recipient_id, recipient_name)
