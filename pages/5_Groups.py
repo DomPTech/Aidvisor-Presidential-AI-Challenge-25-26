@@ -29,36 +29,39 @@ with tab1:
         if st.button("Log In"):
             st.switch_page("pages/1_Login.py")
     else:
-        # Fetch messages from Supabase
-        # Schema: id, user_id, message_text, created_at
-        messages = []
-        if conn:
-            try:
-                response = conn.table("messages").select("*").order("created_at", desc=False).execute()
-                messages = response.data
-            except Exception as e:
-                st.error(f"Error fetching messages: {e}")
+        @st.fragment(run_every=2)
+        def show_messages():
+            # Fetch messages from Supabase
+            # Schema: id, user_id, message_text, created_at
+            messages = []
+            if conn:
+                try:
+                    response = conn.table("messages").select("*").order("created_at", desc=False).execute()
+                    messages = response.data
+                except Exception as e:
+                    st.error(f"Error fetching messages: {e}")
 
-        # Display messages
-        current_user_id = st.session_state.get("user_id")
+            # Display messages
+            current_user_id = st.session_state.get("user_id")
+            
+            for m in messages:
+                msg_user_id = m.get("user_id")
+                text = m.get("message_text", "")
+                
+                is_me = (msg_user_id == current_user_id)
+                
+                # Using 'user' icon for everyone, distinguish by name/text
+                with st.chat_message("user" if is_me else "assistant"):
+                    prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
+                    st.markdown(f"**{prefix}**: {text}")
         
-        for m in messages:
-            msg_user_id = m.get("user_id")
-            text = m.get("message_text", "")
-            
-            is_me = (msg_user_id == current_user_id)
-            
-            # Using 'user' icon for everyone, distinguish by name/text
-            with st.chat_message("user" if is_me else "assistant"):
-                prefix = "You" if is_me else f"User {msg_user_id[:6] if msg_user_id else 'Unknown'}"
-                st.markdown(f"**{prefix}**: {text}")
+        show_messages()
 
         # Chat input
         if prompt := st.chat_input("Message group..."):
+            current_user_id = st.session_state.get("user_id")
             if current_user_id and conn:
                 try:
-                    # created_at should be handled by default in Supabase usually, 
-                    # but if needed we can rely on server side default
                     conn.table("messages").insert({
                         "user_id": current_user_id,
                         "message_text": prompt
