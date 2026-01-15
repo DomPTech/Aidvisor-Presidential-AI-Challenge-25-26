@@ -1,9 +1,9 @@
 import streamlit as st
-import json
-from openai import OpenAI
 from st_supabase_connection import SupabaseConnection
 import wgpu
 import wgpu.utils
+import csv
+from geopy import distance
 
 web_gpu_available = True
 try:
@@ -35,9 +35,46 @@ with st.sidebar:
         st.info("Local Mode: Runs entirely in your browser using WebGPU. Privacy-focused and free.")
         st.warning("Requires a high-performance GPU and a compatible browser (e.g., Chrome/Edge 113+).")
 
+conn = st.connection("supabase", type=SupabaseConnection)
+
+fips_to_coords = {}
+with open("data/gis/us_county_latlng_with_state.csv", mode='r', encoding='utf-8') as f:
+    reader = csv.DictReader(f)
+    for row in reader:
+        fips_to_coords[row['fips_code']] = (float(row['lat']), float(row['lng']))
+
+user_response = conn.auth.get_user()
+if user_response:
+    user = user_response.user
+    user_id = user.id
+    profile_response = conn.table("profiles").select("*").eq("id", user_id).execute()
 
 # --- HEURISTICS MODE IMPLEMENTATION ---
 if mode == "Heuristics":
+    users = conn.table("profiles").select("*").neq("id", user_id).execute().data
+    
+    user_fips = profile_response.data[0].get('fips_code', 0)
+    user_coords = fips_to_coords.get(str(user_fips), 'Unknown')
+    st.write(f"Your Coordinates: {user_coords}")
+    st.write("")
+    radius_km = st.slider("Search Radius (km)", min_value=1, max_value=3000, value=500)
+
+    for user in users:
+        fips_code = user.get('fips_code', 0)
+
+        if fips_code:
+            coords = fips_to_coords.get(str(fips_code), 'Unknown')
+
+            # Calculate distance
+            dist = distance.distance(coords, user_coords).km
+            
+            # 3. Only display if within the selected radius
+            if dist <= radius_km:
+                with st.expander(f"{user.get('first_name', '')} {user.get('last_name', '')}"):
+                    st.write(f"**Distance:** {dist:.2f} km away")
+                    st.write(f"**FIPS:** {fips_code}")
+                    st.write(f"**Bio:** {user.get('bio', 'No bio provided.')}")  
+                            
     st.info("Heuristics mode is coming soon. Check back later!")
 
 

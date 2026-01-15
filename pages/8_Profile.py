@@ -42,11 +42,11 @@ try:
         if profile_response.data:
             first_name_default = profile_response.data[0].get('first_name', '')
             last_name_default = profile_response.data[0].get('last_name', '')
-            location_default = profile_response.data[0].get('fips_code', '')
+            location_default = profile_response.data[0].get('fips_code', 0)
             bio_default = profile_response.data[0].get('bio', '')
             
             try:
-                default_idx = fips_list.index(location_default)
+                default_idx = fips_list.index(str(location_default))
             except ValueError:
                 default_idx = 0
     else:
@@ -83,7 +83,7 @@ if submit_button:
             "first_name": first_name,
             "last_name": last_name,
             "bio": bio,
-            "fips_code": location,
+            "fips_code": int(location),
         }
         
         # Execute the update
