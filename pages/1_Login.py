@@ -2,12 +2,15 @@ import streamlit as st
 import certifi
 import os
 from st_supabase_connection import SupabaseConnection
+import app.initialize as session_init
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
 conn = st.connection("supabase", type=SupabaseConnection)
 
 st.set_page_config(page_title="Flooding Coordination - Login", layout="wide")
+
+session_init.init_session_state()
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

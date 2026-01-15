@@ -1,6 +1,7 @@
 import streamlit as st
 from app.common import load_data, save_data
 from st_supabase_connection import SupabaseConnection
+import app.initialize as session_init
 
 st.set_page_config(page_title="Flooding Coordination - Notifications", layout="wide")
 
@@ -8,6 +9,8 @@ try:
     conn = st.connection("supabase", type=SupabaseConnection)
 except:
     conn = None
+
+session_init.init_session_state()
 
 unread_count = 0
 if conn and st.session_state.get("user_id"):

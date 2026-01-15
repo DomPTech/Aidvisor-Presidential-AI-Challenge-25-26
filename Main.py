@@ -6,15 +6,12 @@ from app.chatbot.tools.ddg_search import get_news_search
 from app.prediction.scanner import DisasterScanner
 from app.prediction.geospatial import get_h3_location_bundles
 from app.common import load_scan_cache, save_scan_cache, create_pydeck_map
+import app.initialize as session_init
 
 def main():
     st.set_page_config(page_title="Flooding Coordination", layout="wide")
 
-    # Initialize session state
-    for key, val in [('logged_in', False), ('username', None), ('messages', []),
-                     ('hf_api_key', ''), ('hf_model_id', 'deepseek-ai/DeepSeek-R1'), ('scan_results', []), 
-                     ('scan_index', 0), ('scan_queries', []), ('last_scan_time', None)]:
-        if key not in st.session_state: st.session_state[key] = val
+    session_init.init_session_state()
     
     with st.sidebar:
         st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

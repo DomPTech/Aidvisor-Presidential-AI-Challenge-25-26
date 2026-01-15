@@ -3,8 +3,11 @@ import datetime
 import uuid
 from app.coordination.volunteering import get_recommendations
 from app.common import load_data, save_data, create_pydeck_map, FLOODING_ICONS
+import app.initialize as session_init
 
 st.set_page_config(page_title="Flooding Coordination - Volunteering", layout="wide")
+
+session_init.init_session_state()
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

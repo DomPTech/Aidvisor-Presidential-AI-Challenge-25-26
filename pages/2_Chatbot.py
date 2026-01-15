@@ -3,8 +3,11 @@ from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.ddg_search import get_search, get_news_search
 from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
+import app.initialize as session_init
 
 st.set_page_config(page_title="Flooding Coordination - Chatbot", layout="wide")
+
+session_init.init_session_state()
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

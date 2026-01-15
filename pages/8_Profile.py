@@ -2,6 +2,7 @@ import streamlit as st
 from app.common import get_badge
 from st_supabase_connection import SupabaseConnection
 import csv
+import app.initialize as session_init
 
 conn = st.connection("supabase", type=SupabaseConnection)
 
@@ -18,6 +19,8 @@ def get_county_lookup():
 
 fips_to_county = get_county_lookup()
 fips_list = list(fips_to_county.keys())
+
+session_init.init_session_state()
 
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,

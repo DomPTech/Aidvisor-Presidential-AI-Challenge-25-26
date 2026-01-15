@@ -4,6 +4,7 @@ import wgpu
 import wgpu.utils
 import csv
 from geopy import distance
+import app.initialize as session_init
 
 web_gpu_available = True
 try:
@@ -15,6 +16,8 @@ except Exception as e:
     web_gpu_available = False
 
 st.set_page_config(page_title="Flooding Coordination - Database Chatbot", layout="wide")
+
+session_init.init_session_state()
 
 # Initialize Session State
 if "messages_db" not in st.session_state:
