@@ -131,12 +131,12 @@ def show_bounty_details(b):
             st.info("Application Pending")
         else:
             if user_id:
-                if st.button("Apply to Help", key=f"apply_{b['id']}", use_container_width=True):
+                if st.button("Apply to Help", key=f"apply_{b['id']}", width=True):
                     if apply_for_bounty(b['id'], applicants):
                         st.success("Applied successfully!")
                         st.rerun()
             else:
-                if st.button("Log in to Apply", key=f"login_apply_{b['id']}", use_container_width=True):
+                if st.button("Log in to Apply", key=f"login_apply_{b['id']}", width=True):
                     st.switch_page("pages/1_Login.py")
 
 # --- UI Sections ---

@@ -54,7 +54,7 @@ if user_response:
 
 # --- HEURISTICS MODE IMPLEMENTATION ---
 if mode == "Heuristics":
-    users = conn.table("profiles").select("*").neq("id", user_id).execute().data
+    users = conn.table("profiles").select("*").neq("id", user_id).execute().data #user id needs to be fixed not defined
     
     user_fips = profile_response.data[0].get('fips_code', 0)
     user_coords = fips_to_coords.get(str(user_fips), 'Unknown')
