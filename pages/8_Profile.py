@@ -102,6 +102,54 @@ if submit_button:
         st.warning("Please enter a name and ensure user is logged in.")
         
 st.divider()
+st.subheader("Manage My Bounties")
+
+try:
+    # Fetch requests posted by user
+    my_bounties = conn.table("help_requests").select("*").eq("poster_id", user_id).execute()
+    if not my_bounties.data:
+        st.info("You haven't posted any help requests.")
+    else:
+        for b in my_bounties.data:
+            with st.expander(f"{b['disaster_type']} - Posted {b['created_at'][:10]}", expanded=True):
+                st.write(b['content'])
+                
+                applicants = b.get('applicants', []) or []
+                current_vols = b.get('current_volunteers', []) or []
+                
+                st.caption(f"Current Volunteers: {len(current_vols)}")
+                
+                if not applicants:
+                    st.caption("No pending applicants.")
+                else:
+                    st.write("**Pending Applicants:**")
+                    for app_id in applicants:
+                        c1, c2, c3 = st.columns([3, 1, 1])
+                        c1.code(app_id) # Should ideally fetch profile name
+                        
+                        if c2.button("Accept", key=f"acc_{b['id']}_{app_id}"):
+                            new_applicants = [x for x in applicants if x != app_id]
+                            if app_id not in current_vols:
+                                new_volunteers = current_vols + [app_id]
+                            else:
+                                new_volunteers = current_vols
+                            
+                            conn.table("help_requests").update({
+                                "applicants": new_applicants, 
+                                "current_volunteers": new_volunteers
+                            }).eq("id", b['id']).execute()
+                            st.rerun()
+                            
+                        if c3.button("Reject", key=f"rej_{b['id']}_{app_id}"):
+                            new_applicants = [x for x in applicants if x != app_id]
+                            conn.table("help_requests").update({
+                                "applicants": new_applicants
+                            }).eq("id", b['id']).execute()
+                            st.rerun()
+except Exception as e:
+    st.error(f"Error fetching bounties: {e}")
+
+st.divider()
 st.subheader("Settings")
 with st.expander("🔐 Change Password"):
     new_pw = st.text_input("New Password", type="password", key="new_pw")

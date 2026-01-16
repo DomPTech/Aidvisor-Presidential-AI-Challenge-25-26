@@ -1,19 +1,19 @@
 import streamlit as st
 from st_supabase_connection import SupabaseConnection
-import wgpu
-import wgpu.utils
+# import wgpu
+# import wgpu.utils
 import csv
 from geopy import distance
 import app.initialize as session_init
 
 web_gpu_available = True
-try:
-    # Get default adapter (might be software)
-    adapter = wgpu.utils.get_default_device().adapter
-    print(f"WebGPU Adapter Found: {adapter.info['name']}")
-except Exception as e:
-    print(f"WebGPU not available via wgpu-py: {e}")
-    web_gpu_available = False
+# try:
+#     # Get default adapter (might be software)
+#     adapter = wgpu.utils.get_default_device().adapter
+#     print(f"WebGPU Adapter Found: {adapter.info['name']}")
+# except Exception as e:
+#     print(f"WebGPU not available via wgpu-py: {e}")
+#     web_gpu_available = False
 
 st.set_page_config(page_title="Flooding Coordination - Database Chatbot", layout="wide")
 

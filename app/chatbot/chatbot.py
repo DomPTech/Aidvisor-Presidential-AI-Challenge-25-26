@@ -72,6 +72,35 @@ class DisasterAgent:
             {
                 "type": "function",
                 "function": {
+                    "name": "post_disaster_alert",
+                    "description": "Post a verified disaster alert to the public Bounty Board for volunteers to see.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "location": {
+                                "type": "string",
+                                "description": "Location of the event (e.g., 'Miami, FL')."
+                            },
+                            "summary": {
+                                "type": "string",
+                                "description": "Brief summary of the need or threat."
+                            },
+                            "severity": {
+                                "type": "integer",
+                                "description": "Severity level from 1 to 10."
+                            },
+                            "disaster_type": {
+                                "type": "string",
+                                "description": "Type: 'Flood', 'Hurricane', 'Fire', 'Earthquake', etc."
+                            }
+                        },
+                        "required": ["location", "summary", "severity"] 
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "get_search",
                     "description": "General web search using DuckDuckGo.",
                     "parameters": {
@@ -281,8 +310,10 @@ if __name__ == "__main__":
     # Test with tools
     from app.chatbot.tools.ddg_search import get_search, get_news_search
     from app.chatbot.tools.nws_alerts import get_nws_alerts
+    from app.chatbot.tools.bounty_tools import post_disaster_alert
     
     test_tools = {
+        "post_disaster_alert": post_disaster_alert,
         "get_search": get_search,
         "get_news_search": get_news_search,
         "get_nws_alerts": get_nws_alerts

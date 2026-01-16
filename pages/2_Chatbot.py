@@ -3,6 +3,7 @@ from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.ddg_search import get_search, get_news_search
 from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
+from app.chatbot.tools.bounty_tools import post_disaster_alert
 import app.initialize as session_init
 
 st.set_page_config(page_title="Flooding Coordination - Chatbot", layout="wide")
@@ -28,7 +29,8 @@ if prompt := st.chat_input("Help?"):
                               "get_news_search": get_news_search, 
                               "get_nws_alerts": get_nws_alerts,
                               "get_fema_disaster_declarations": get_fema_disaster_declarations,
-                              "get_fema_assistance_data": get_fema_assistance_data
+                              "get_fema_assistance_data": get_fema_assistance_data,
+                              "post_disaster_alert": post_disaster_alert
                           })
     with st.chat_message("assistant"):
         res = agent.get_response(prompt, history=st.session_state.messages[:-1])
