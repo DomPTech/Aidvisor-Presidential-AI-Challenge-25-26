@@ -329,4 +329,5 @@ with col1:
             pass
         st.session_state.logged_in = False
         st.session_state.username = None
+        st.seession_state.user_id = None
         st.switch_page("pages/1_Login.py")

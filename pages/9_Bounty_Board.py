@@ -26,7 +26,10 @@ def load_bounties():
         return []
     try:
         user_id = st.session_state.get("user_id")
-        response = conn.table("help_requests").select("*").neq("poster_id", user_id if user_id else "").order("created_at", desc=True).execute()
+        if user_id:
+            response = conn.table("help_requests").select("*").neq("poster_id", user_id).order("created_at", desc=True).execute()
+        else:
+            response = conn.table("help_requests").select("*").order("created_at", desc=True).execute()
         return response.data
     except Exception as e:
         st.error(f"Error fetching bounties: {e}")
@@ -120,10 +123,14 @@ def show_bounty_details(b):
         elif is_applicant:
             st.info("Application Pending")
         else:
-            if st.button("Apply to Help", key=f"apply_{b['id']}"):
-                if apply_for_bounty(b['id'], applicants):
-                    st.success("Applied successfully!")
-                    st.rerun()
+            if user_id:
+                if st.button("Apply to Help", key=f"apply_{b['id']}", use_container_width=True):
+                    if apply_for_bounty(b['id'], applicants):
+                        st.success("Applied successfully!")
+                        st.rerun()
+            else:
+                if st.button("Log in to Apply", key=f"login_apply_{b['id']}", use_container_width=True):
+                    st.switch_page("pages/1_Login.py")
 
 # --- UI Sections ---
 
