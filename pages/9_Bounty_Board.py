@@ -28,6 +28,13 @@ def load_bounties():
         user_id = st.session_state.get("user_id")
         if user_id:
             response = conn.table("help_requests").select("*").neq("poster_id", user_id).order("created_at", desc=True).execute()
+            # Filter out bounties where user is already a volunteer or applicant
+            filtered_data = [
+                b for b in response.data 
+                if st.session_state.get("user_id") not in (b.get('current_volunteers') or []) 
+                and st.session_state.get("user_id") not in (b.get('applicants') or [])
+            ]
+            return filtered_data
         else:
             response = conn.table("help_requests").select("*").order("created_at", desc=True).execute()
         return response.data
@@ -165,7 +172,7 @@ with col_community:
     
     # "Post Request" Button
     with row_header[1]:
-        if st.button("➕ Post Request"):
+        if st.button("Post", icon=":material/add:"):
             # Use a dialog for simpler interaction
             @st.dialog("Post Help Request")
             def item_dialog():
