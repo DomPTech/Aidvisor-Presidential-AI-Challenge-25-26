@@ -13,7 +13,7 @@ def get_recommendations(user_info, hf_api_key, hf_model_id="deepseek-ai/DeepSeek
     Get AI-driven volunteer and donation recommendations based on user info.
     """
     if not hf_api_key:
-        return "Please provide a HuggingFace API Key in the settings sidebar to get recommendations."
+        return "Please provide a HuggingFace API Key in `.streamlit/secrets.toml` to get recommendations."
     
     tools = {
         "get_news_search": get_news_search,

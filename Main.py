@@ -14,8 +14,7 @@ def main():
     session_init.init_session_state()
     
     with st.sidebar:
-        st.session_state.hf_api_key = st.text_input("HuggingFace API Key", value=st.session_state.hf_api_key,
-                                                    type="password")
+        pass
 
     # Load cached scan data from disk on first run
     if not st.session_state.scan_results and not st.session_state.last_scan_time:
