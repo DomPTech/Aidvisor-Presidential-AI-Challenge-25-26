@@ -27,9 +27,13 @@ def get_nws_alerts(lat, lon):
         features = data.get("features", [])
         
         if not features:
-            return f"No active NWS alerts for the location ({lat}, {lon})."
+            return {
+                "summary": f"No active NWS alerts for the location ({lat}, {lon}).",
+                "visuals": None
+            }
             
         alert_summaries = []
+        map_data = [{"lat": lat, "lon": lon, "name": "Query Location"}]
         for feature in features:
             properties = feature.get("properties", {})
             event = properties.get("event", "Unknown Event")
@@ -42,10 +46,19 @@ def get_nws_alerts(lat, lon):
                 f"Event: {event}\nSeverity: {severity}\nArea: {area}\nHeadline: {headline}"
             )
             
-        return "\n\n---\n\n".join(alert_summaries)
+        return {
+            "summary": "\n\n---\n\n".join(alert_summaries),
+            "visuals": {
+                "type": "map",
+                "data": map_data
+            }
+        }
         
     except Exception as e:
-        return f"Error fetching NWS alerts: {str(e)}"
+        return {
+            "summary": f"Error fetching NWS alerts: {str(e)}",
+            "visuals": None
+        }
 
 if __name__ == "__main__":
     # Test with a location (e.g., Nashville, TN)

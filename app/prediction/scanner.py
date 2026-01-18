@@ -109,13 +109,15 @@ class DisasterScanner:
         # Try county-specific queries first, then fall back to state
         if counties:
             for county in counties:
-                fema_data = get_fema_disaster_declarations(state=state_abbr, county=county, days=30)
+                fema_result = get_fema_disaster_declarations(state=state_abbr, county=county, days=30)
+                fema_data = fema_result.get("summary", "") if isinstance(fema_result, dict) else fema_result
                 if not ("No recent FEMA disaster declarations found" in fema_data or "Error" in fema_data):
                     break
         
         # If no county-specific results, try state-wide
         if not fema_data or "No recent FEMA disaster declarations found" in fema_data or "Error" in fema_data:
-            fema_data = get_fema_disaster_declarations(state=state_abbr, days=30)
+            fema_result = get_fema_disaster_declarations(state=state_abbr, days=30)
+            fema_data = fema_result.get("summary", "") if isinstance(fema_result, dict) else fema_result
 
         if "No recent FEMA disaster declarations found" in fema_data or "Error" in fema_data:
             return self._empty_response(bundle)

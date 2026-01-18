@@ -38,8 +38,10 @@ def get_fema_disaster_declarations(state=None, county=None, days=360):
         
         declarations = data.get('DisasterDeclarationsSummaries', [])
         if not declarations:
-            print(url)
-            return f"No recent FEMA disaster declarations found for {state or ''} {county or ''}."
+            return {
+                "summary": f"No recent FEMA disaster declarations found for {state or ''} {county or ''}.",
+                "visuals": None
+            }
         
         # Deduplicate by disaster number since multiple counties can be in one declaration
         seen_disasters = set()
@@ -58,9 +60,15 @@ def get_fema_disaster_declarations(state=None, county=None, days=360):
             count += 1
             if count >= 5: break
             
-        return result
+        return {
+            "summary": result,
+            "visuals": None # Generic declarations don't need a specific map/chart yet
+        }
     except Exception as e:
-        return f"Error fetching FEMA declarations: {str(e)}"
+        return {
+            "summary": f"Error fetching FEMA declarations: {str(e)}",
+            "visuals": None
+        }
 
 def get_fema_assistance_data(state, county=None):
     """
@@ -83,9 +91,13 @@ def get_fema_assistance_data(state, county=None):
         
         summaries = data.get('HousingAssistanceOwners', [])
         if not summaries:
-            return f"No FEMA housing assistance data found for {state} {county or ''}."
+            return {
+                "summary": f"No FEMA housing assistance data found for {state} {county or ''}.",
+                "visuals": None
+            }
             
         result = f"Recent FEMA Housing Assistance Data (Owners) for {state}:\n"
+        chart_data = []
         # Records are by Zip code, so we aggregate or show top zip codes
         for item in summaries[:5]:
             county_name = item.get('county', 'Unknown County')
@@ -94,12 +106,28 @@ def get_fema_assistance_data(state, county=None):
             approved = item.get('totalApprovedIhpAmount', 0)
             valid_reg = item.get('validRegistrations', 0)
             disaster = item.get('disasterNumber', 'N/A')
+            
             if approved > 0 or valid_reg > 0:
-                result += f"- {city}, {county_name} (Zip: {zip_code}): ${approved:,.2f} approved for {valid_reg} registrations (Disaster: {disaster}).\n"
+                label = f"{city} ({zip_code})"
+                result += f"- {label}, {county_name}: ${approved:,.2f} approved for {valid_reg} registrations (Disaster: {disaster}).\n"
+                chart_data.append({
+                    "Location": label,
+                    "Approved Funding ($)": approved,
+                    "Registrations": valid_reg
+                })
         
-        return result
+        return {
+            "summary": result,
+            "visuals": {
+                "type": "chart",
+                "data": chart_data
+            } if chart_data else None
+        }
     except Exception as e:
-        return f"Error fetching FEMA assistance data: {str(e)}"
+        return {
+            "summary": f"Error fetching FEMA assistance data: {str(e)}",
+            "visuals": None
+        }
 
 if __name__ == "__main__":
     # Test queries

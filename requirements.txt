@@ -24,3 +24,5 @@ streamlit-audiorec
 SpeechRecognition
 pydub
 pocketsphinx
+pandas
+plotly

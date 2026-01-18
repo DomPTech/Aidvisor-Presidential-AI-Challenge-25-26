@@ -29,7 +29,7 @@ class DisasterAgent:
                 api_key=token,
             )
 
-    def get_response(self, user_input, history=None):
+    def get_response(self, user_input, history=None, return_raw=False):
         """
         Generate a response from the chatbot.
         
@@ -37,9 +37,11 @@ class DisasterAgent:
             user_input (str): The user's message.
             history (list): List of previous messages (optional, for context).
                             Format: [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
+            return_raw (bool): If True, return a dict with {"text": ..., "visuals": ...}.
+                               If False, return only the text str.
         
         Returns:
-            str: The chatbot's response.
+            str|dict: The chatbot's response.
         """
         if not self.client:
             return "Error: API Token is missing. Please provide a HuggingFace API Token."
@@ -236,6 +238,7 @@ class DisasterAgent:
             )
             
             response_message = completion.choices[0].message
+            collected_visuals = []
             
             # Check if the model wants to call a tool
             if response_message.tool_calls:
@@ -268,15 +271,25 @@ class DisasterAgent:
                             tool_result = tool_func(**function_args)
                             print(f"✅ Tool {function_name} returned data.")
                         except Exception as tool_err:
-                            tool_result = f"Error executing tool: {str(tool_err)}"
+                            tool_result = f"Error executing tool: {str(e)}"
                             print(f"❌ Tool {function_name} error: {tool_err}")
                         
+                        # Handle structured results for visualizations
+                        if isinstance(tool_result, dict):
+                            summary = tool_result.get("summary", str(tool_result))
+                            visual = tool_result.get("visuals")
+                            if visual:
+                                collected_visuals.append(visual)
+                            tool_content = summary
+                        else:
+                            tool_content = str(tool_result)
+
                         # Add tool result to messages
                         messages.append({
                             "tool_call_id": tool_call.id,
                             "role": "tool",
                             "name": function_name,
-                            "content": str(tool_result),
+                            "content": tool_content,
                         })
                     else:
                         # Handle unknown tool
@@ -293,9 +306,15 @@ class DisasterAgent:
                     messages=messages,
                     max_tokens=600,
                 )
-                return self._clean_response(final_completion.choices[0].message.content)
+                final_text = self._clean_response(final_completion.choices[0].message.content)
+                if return_raw:
+                    return {"text": final_text, "visuals": collected_visuals}
+                return final_text
             
-            return self._clean_response(response_message.content)
+            final_text = self._clean_response(response_message.content)
+            if return_raw:
+                return {"text": final_text, "visuals": []}
+            return final_text
 
         except Exception as e:
             import traceback

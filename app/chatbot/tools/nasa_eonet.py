@@ -29,9 +29,13 @@ def get_nasa_eonet_events(limit=10, days=20, status='open'):
         events = data.get("events", [])
         
         if not events:
-            return f"No {status} natural events found in the last {days} days."
+            return {
+                "summary": f"No {status} natural events found in the last {days} days.",
+                "visuals": None
+            }
             
         summaries = []
+        map_data = []
         for event in events:
             title = event.get("title", "Unknown Event")
             categories = ", ".join([cat.get("title", "") for cat in event.get("categories", [])])
@@ -41,12 +45,15 @@ def get_nasa_eonet_events(limit=10, days=20, status='open'):
             # Get latest geometry (location)
             geometries = event.get("geometry", [])
             location_info = "Location data unavailable"
+            lat, lon = None, None
             if geometries:
                 latest_geo = geometries[0]
                 coords = latest_geo.get("coordinates", [])
                 date = latest_geo.get("date", "Unknown Date")
                 if len(coords) >= 2:
-                    location_info = f"Coordinates: {coords[1]}, {coords[0]} (Lat/Lon) at {date}"
+                    lon, lat = coords[0], coords[1]
+                    location_info = f"Coordinates: {lat}, {lon} (Lat/Lon) at {date}"
+                    map_data.append({"lat": lat, "lon": lon, "name": title})
             
             summaries.append(
                 f"Event: {title}\n"
@@ -56,10 +63,19 @@ def get_nasa_eonet_events(limit=10, days=20, status='open'):
                 f"More info: {link}"
             )
             
-        return "\n\n---\n\n".join(summaries)
+        return {
+            "summary": "\n\n---\n\n".join(summaries),
+            "visuals": {
+                "type": "map",
+                "data": map_data
+            } if map_data else None
+        }
         
     except Exception as e:
-        return f"Error fetching NASA EONET events: {str(e)}"
+        return {
+            "summary": f"Error fetching NASA EONET events: {str(e)}",
+            "visuals": None
+        }
 
 if __name__ == "__main__":
     # Test fetch
