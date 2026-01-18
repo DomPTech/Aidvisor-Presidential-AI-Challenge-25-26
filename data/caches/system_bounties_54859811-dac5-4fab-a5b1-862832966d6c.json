@@ -1,15 +1,15 @@
 {
-  "timestamp": "2026-01-18T10:35:59.249821",
+  "timestamp": "2026-01-18T13:02:30.484154",
   "bounties": [
     {
-      "title": "FEMA Aid Requested for December Windstorm",
-      "description": "Governor Larry Rhoden has requested FEMA assistance after a December windstorm caused over $1.7M in damages across South Dakota.",
-      "location": "South Dakota",
+      "title": "Severe Storms, Straight-line Winds, Tornadoes, and Flooding Response Needed in Knox County, TN",
+      "description": "FEMA has declared a disaster in Tennessee due to severe storms, straight-line winds, tornadoes, and flooding. Assistance is needed for recovery efforts.",
+      "location": "Knox County, TN",
       "urgency": 8,
       "contact_info": {
         "phone": "",
         "email": "",
-        "link": "https://www.msn.com/en-us/news/us/gov-rhoden-requests-fema-aid-after-december-windstorm-hit-south-dakota/ar-AA1TKXDu?ocid=BingNewsVerp"
+        "link": "https://www.fema.gov/disaster/4878"
       }
     }
   ]
