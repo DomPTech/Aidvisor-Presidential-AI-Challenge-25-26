@@ -198,6 +198,30 @@ class DisasterAgent:
                         "required": ["state"] 
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_nasa_eonet_events",
+                    "description": "Get recent natural events (wildfires, storms, volcanoes, etc.) from NASA EONET.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of events to return (default is 10)."
+                            },
+                            "days": {
+                                "type": "integer",
+                                "description": "Number of days to look back (default is 20)."
+                            },
+                            "status": {
+                                "type": "string",
+                                "description": "Status of events to return: 'open' or 'closed' (default is 'open')."
+                            }
+                        }
+                    }
+                }
             }
         ]
         

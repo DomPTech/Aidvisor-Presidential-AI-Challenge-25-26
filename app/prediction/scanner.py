@@ -18,11 +18,21 @@ class DisasterScanner:
     def __init__(self):
         self.classifier = get_classifier()
         self.candidate_labels = ["Critical Disaster", "Moderate Warning", "General Information", "Not Disaster Related"]
+        # Fast keyword pre-filter to avoid constant LLM inference
+        self.disaster_keywords = [
+            "flood", "flood", "storm", "hurricane", "tornado", "earthquake", 
+            "fire", "wildfire", "emergency", "evacuation", "warning", "watch",
+            "damage", "victim", "rescue", "disaster", "alert", "danger"
+        ]
         
     def get_severity_score(self, text):
         """
         Calculates a severity score (0-10) based on zero-shot classification results.
         """
+        # Keyword check before BERT
+        if not any(kw in text.lower() for kw in self.disaster_keywords):
+            return 0.0
+
         result = self.classifier(text, candidate_labels=self.candidate_labels)
         label_to_score = {
             "Critical Disaster": 10,
@@ -31,30 +41,59 @@ class DisasterScanner:
             "Not Disaster Related": 0
         }
         
-        # Weighted average or top label score
         top_label = result['labels'][0]
         top_score = result['scores'][0]
         
         base_score = label_to_score[top_label]
-        # Adjust score by confidence
         final_score = base_score * top_score
         
         return round(min(10, final_score), 1)
 
     def scan_texts(self, texts):
         """
-        Scans a list of texts and returns a list of results with severity and coordinates.
+        Scans a list of texts using batch processing for performance.
         """
+        # 1. Quick Keyword Filter
+        filtered_indices = []
+        filtered_texts = []
+        for i, text in enumerate(texts):
+            if any(kw in text.lower() for kw in self.disaster_keywords):
+                filtered_indices.append(i)
+                filtered_texts.append(text)
+        
+        if not filtered_texts:
+            return []
+
+        # 2. Batch BERT Classification
         results = []
-        for text in texts:
-            severity = self.get_severity_score(text)
+        try:
+            # The transformers pipeline supports batching if passed a list
+            batch_results = self.classifier(filtered_texts, candidate_labels=self.candidate_labels)
             
-            if severity > 0:
-                # We often don't have coordinates in the text, so we return severity and the text
-                results.append({
-                    "text": text[:200] + "...", 
-                    "severity": severity,
-                })
+            # If only one text, result might not be a list of dicts but a dict
+            if isinstance(batch_results, dict):
+                batch_results = [batch_results]
+
+            label_to_score = {
+                "Critical Disaster": 10,
+                "Moderate Warning": 5,
+                "General Information": 2,
+                "Not Disaster Related": 0
+            }
+
+            for i, res in enumerate(batch_results):
+                top_label = res['labels'][0]
+                top_score = res['scores'][0]
+                severity = round(min(10, label_to_score[top_label] * top_score), 1)
+                
+                if severity > 0:
+                    results.append({
+                        "text": filtered_texts[i][:200] + "...", 
+                        "severity": severity,
+                    })
+        except Exception as e:
+            print(f"Error in batch scan: {e}")
+            
         return results
 
     def scan_bundle_news(self, bundle):

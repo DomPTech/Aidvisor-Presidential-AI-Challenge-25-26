@@ -49,6 +49,11 @@ def main():
 
     st.title("Disaster Heatmap")
 
+    # Initial fetch for NASA events (if not already in session state)
+    if "nasa_events" not in st.session_state:
+        from app.common import fetch_nasa_eonet_events_for_map
+        st.session_state.nasa_events = fetch_nasa_eonet_events_for_map()
+
     # Containers for persistent UI
     scan_status_container = st.empty()
     map_container = st.empty()
@@ -104,16 +109,18 @@ def main():
             # Update state and progress
             st.session_state.scan_index = i + 1
             
-            # Deduplicate results
-            unique_res = {}
-            for r in st.session_state.scan_results:
-                key = r.get('cell') or r.get('text')
-                unique_res[key] = r
-            st.session_state.scan_results = list(unique_res.values())
-            
-            # Update map and progress bar live
-            map_container.pydeck_chart(create_pydeck_map())
-            progress_bar.progress((i + 1) / len(st.session_state.scan_queries))
+            # Update UI every 3 items to reduce lag (throttling)
+            if i % 3 == 0 or (i + 1) == len(st.session_state.scan_queries):
+                # Deduplicate results
+                unique_res = {}
+                for r in st.session_state.scan_results:
+                    key = r.get('cell') or r.get('text')
+                    unique_res[key] = r
+                st.session_state.scan_results = list(unique_res.values())
+                
+                # Update map and progress bar live
+                map_container.pydeck_chart(create_pydeck_map())
+                progress_bar.progress((i + 1) / len(st.session_state.scan_queries))
 
         status_text.success("Initial Scan Complete")
         st.session_state.last_scan_time = datetime.datetime.now()

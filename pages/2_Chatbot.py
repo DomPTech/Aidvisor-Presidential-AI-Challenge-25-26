@@ -3,6 +3,7 @@ from app.chatbot.chatbot import DisasterAgent
 from app.chatbot.tools.ddg_search import get_search, get_news_search
 from app.chatbot.tools.nws_alerts import get_nws_alerts
 from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_assistance_data
+from app.chatbot.tools.nasa_eonet import get_nasa_eonet_events
 from app.chatbot.tools.bounty_tools import post_disaster_alert
 import app.initialize as session_init
 
@@ -29,6 +30,7 @@ if prompt := st.chat_input("Help?"):
                               "get_nws_alerts": get_nws_alerts,
                               "get_fema_disaster_declarations": get_fema_disaster_declarations,
                               "get_fema_assistance_data": get_fema_assistance_data,
+                              "get_nasa_eonet_events": get_nasa_eonet_events,
                               "post_disaster_alert": post_disaster_alert
                           })
     with st.chat_message("assistant"):

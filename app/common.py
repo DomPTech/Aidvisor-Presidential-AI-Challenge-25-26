@@ -7,6 +7,7 @@ import datetime
 import json
 import os
 import h3
+import requests
 
 FLOODING_ICONS = {
     "💧 Water/Need": "tint",
@@ -64,6 +65,60 @@ def save_scan_cache(scan_results, last_scan_time):
     with open(SCAN_CACHE_FILE, "w") as f:
         json.dump(cache, f)
 
+@st.cache_data(ttl=3600)
+def fetch_nasa_eonet_events_for_map():
+    """
+    Fetch open events from NASA EONET for the heatmap.
+    """
+    try:
+        url = "https://eonet.gsfc.nasa.gov/api/v3/events"
+        params = {"status": "open", "limit": 50}
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        nasa_events = []
+        # Severity mapping based on EONET categories
+        SEVERITY_MAPPING = {
+            "Severe Storms": 10,
+            "Wildfires": 9,
+            "Floods": 9,
+            "Earthquakes": 10,
+            "Volcanoes": 8,
+            "Landslides": 7,
+            "Temp Extremes": 6,
+            "Sea and Lake Ice": 4,
+            "Drought": 5,
+        }
+        
+        for event in data.get("events", []):
+            geometries = event.get("geometry", [])
+            categories = event.get("categories", [])
+            
+            # Determine max severity based on categories
+            severity = 5 # Default base
+            for cat in categories:
+                cat_title = cat.get("title")
+                if cat_title in SEVERITY_MAPPING:
+                    severity = max(severity, SEVERITY_MAPPING[cat_title])
+            
+            if geometries:
+                latest_geo = geometries[0]
+                coords = latest_geo.get("coordinates", [])
+                if len(coords) >= 2:
+                    nasa_events.append({
+                        "lat": coords[1],
+                        "lon": coords[0],
+                        "severity": severity,
+                        "location": event.get("title", "NASA Alert"),
+                        "text": f"NASA EONET Alert: {event.get('title')}. Source: {event.get('sources', [{}])[0].get('url', 'N/A')}",
+                        "source": "NASA EONET"
+                    })
+        return nasa_events
+    except Exception as e:
+        print(f"Error fetching NASA EONET for map: {e}")
+        return []
+
 def get_badge(username):
     data = load_data()
     user_info = data["users"].get(username, {})
@@ -75,7 +130,7 @@ def get_badge(username):
     if points >= 5: return "🥉 Bronze Volunteer"
     return "🌱 New Member"
 
-def create_pydeck_map(scan_results=None):
+def create_pydeck_map(scan_results=None, nasa_events=None):
     """
     Creates a Pydeck map with a heatmap layer and picker layer for incidents.
     """
@@ -88,7 +143,8 @@ def create_pydeck_map(scan_results=None):
         entry = {
             "weight": res.get("severity", 0),
             "name": res.get("location", "Unknown Location"),
-            "needs": res.get("text", "No detailed report available.")
+            "needs": res.get("text", "No detailed report available."),
+            "source": res.get("source", "Scan Result")
         }
         if "cell" in res:
             try:
@@ -101,6 +157,20 @@ def create_pydeck_map(scan_results=None):
             entry.update({"lat": res["lat"], "lon": res["lon"]})
             heatmap_data.append(entry)
     
+    # Include NASA EONET Events
+    if nasa_events is None:
+        nasa_events = st.session_state.get("nasa_events", [])
+        
+    for event in nasa_events:
+        heatmap_data.append({
+            "lat": event["lat"],
+            "lon": event["lon"],
+            "weight": event["severity"],
+            "name": event['location'],
+            "needs": event["text"],
+            "source": event.get("source", "NASA EONET")
+        })
+    
     # Prepare Incident Data
     data = load_data()
     incident_data = []
@@ -109,7 +179,9 @@ def create_pydeck_map(scan_results=None):
             "lat": incident["Latitude"],
             "lon": incident["Longitude"],
             "name": incident["Title"],
-            "needs": incident["Needs"]
+            "needs": incident["Needs"],
+            "source": "Incident Report",
+            "weight": 7  # Default severity for user incidents
         })
     
     # Define Layers
@@ -169,11 +241,15 @@ def create_pydeck_map(scan_results=None):
         initial_view_state=view_state,
         map_style=None,
         tooltip={
-            "html": "<div>Severity: {weight}<br>Location: {name}<br>Details: {needs}</div>",
+            "html": "<div><b>{source}</b><br>Severity: {weight}<br>Location: {name}<br>Details: {needs}</div>",
             "style": {
-                "max-width": "200px",
+                "max-width": "350px",
+                "max-height": "300px",
+                "overflow-y": "auto",
                 "word-wrap": "break-word",
-                "white-space": "normal"
+                "white-space": "normal",
+                "font-size": "12px",
+                "padding": "10px"
             }
         }
     )

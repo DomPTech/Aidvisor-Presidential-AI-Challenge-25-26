@@ -28,10 +28,14 @@ def get_gis_data():
         _gis_cache["counties"] = gpd.read_file("data/gis/counties/counties.shp") if not _gis_cache.get("counties") else _gis_cache["counties"]
         _gis_cache["cities"] = gpd.read_file("data/gis/cities/cities.shp") if not _gis_cache.get("cities") else _gis_cache["cities"]
         
-        # Ensure CRS is consistent (EPSG:4326 for lat/lon)
+        # Ensure CRS is consistent (EPSG:4326 for lat/lon) and trigger spatial index
         for key in ["states", "counties", "cities"]:
-            if not _gis_cache[key].empty and _gis_cache[key].crs != "EPSG:4326":
-                _gis_cache[key] = _gis_cache[key].to_crs("EPSG:4326")
+            if not _gis_cache[key].empty:
+                if _gis_cache[key].crs != "EPSG:4326":
+                    _gis_cache[key] = _gis_cache[key].to_crs("EPSG:4326")
+                # Trigger spatial index creation explicitly for speed
+                _ = _gis_cache[key].sindex
+                
     except Exception as e:
         st.error(f"Error loading GIS data: {e}")
         # Fallback to empty GDFs to prevent crashes
