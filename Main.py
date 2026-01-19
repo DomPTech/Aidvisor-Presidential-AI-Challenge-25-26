@@ -1,4 +1,5 @@
 import streamlit as st
+from streamlit.components.v1 import html as scv1html
 from streamlit_float import *
 import datetime
 import h3
@@ -16,7 +17,7 @@ import json
 
 float_init()
 
-def main():
+def heatmap():
     st.set_page_config(page_title="Flooding Coordination", layout="wide")
 
     session_init.init_session_state()
@@ -191,7 +192,7 @@ def chatbot_widget():
                 st.rerun()
             
             # Clear chat button
-            if st.button("🗑️ Clear Chat", key="clear_global_chat", use_container_width=True):
+            if st.button("🗑️ Clear Chat", key="clear_global_chat", width="stretch"):
                 st.session_state.global_messages = []
                 st.session_state.global_agent = None
                 st.rerun()
@@ -205,7 +206,82 @@ def chatbot_widget():
     chat_widget_container.float(
         "bottom: 20px; right: 20px; width: 400px;"
         f"background-color: {bg_color};"
+        "z-index: 1000;"
     )
+
+def scroll_to_heatmap_widget():
+    scroll_to_heatmap_container = st.container()
+    
+    with scroll_to_heatmap_container:
+        with st.container(border=True):
+            st.markdown(":material/south: **View Heatmap**")
+
+    scroll_to_heatmap_container.float(
+        "bottom: 75px; right: 20px; "
+        "width: 160px; "
+        "border-radius: 10px; "
+        "box-shadow: 0 4px 12px rgba(0,0,0,0.1); "
+        "transition: all 0.5s ease-in-out; "
+        "animation: bounce 2s infinite;"
+    )
+
+def main():
+    head_col1, head_col2 = st.columns([1.5, 5], vertical_alignment="center")
+    
+    with head_col1:
+        try:
+            st.image("Images/Presidential_AI_Challenge_Logo.png", width=160)
+        except:
+            # Fallback icon if image is missing
+            st.warning("⚠️ Logo missing")
+
+    with head_col2:  
+        st.title("DisasterAId:")
+        st.header("The Future of Disaster Response")
+        st.markdown(
+            "#### Connecting communities with AI-coordinated bounties to save lives, time, and taxpayer dollars."
+        )
+
+    st.divider()
+
+    st.markdown("### :material/chart_data: The Cost of Uncoordinated Chaos")
+    st.write("Disasters are expensive, but the logistics gap—wasted time and unused skills—costs even more.")
+
+    with st.container(border=True):
+        m1, m2, m3 = st.columns(3)
+        
+        with m1:
+            st.metric(
+                label="2024 Disaster Costs (US)",
+                value="$182.7 Billion",
+                delta="4th Costliest Year on Record",
+                delta_color="inverse",
+                help="Source: NOAA NCEI 2024 Billion-Dollar Disaster Report (Jan 2025 Update)"
+            )
+        
+        with m2:
+            st.metric(
+                label="Value of a Volunteer Hour",
+                value="$34.79 / hr",
+                delta="+3.9% from 2023",
+                help="Source: Independent Sector & Do Good Institute (April 2025 Release)"
+            )
+        
+        with m3:
+            st.metric(
+                label="Wasted Volunteer Capacity",
+                value="65% Unused",
+                delta="Offers of help rejected/lost",
+                delta_color="inverse",
+                help="Source: Red Cross & GWU Research on Spontaneous Unaffiliated Volunteers (SUV). Most walk-in volunteers are turned away due to lack of coordination systems."
+            )
+
+    st.info(
+        "**How DisasterAId Solves It:**\n\n"
+        "Instead of turning volunteers away, DisasterAId treats relief work as **'Bounties'** and uses AI to aggregate and distill fragmented information from agencies, shelters, and community groups—so volunteers see only clear, relevant tasks with the skills, time, and instructions they need. Our matching engine then routes verified volunteers to the right bounties and keeps coordination synchronized in real time. By connecting helpers and organizations on a national platform, we reduce duplication, increase utilization, and unlock the estimated **$34.79/hr** value of every neighbor—closing the current 65% utilization gap and maximizing impact where it matters most."
+    )
+    scroll_to_heatmap_widget()
+    heatmap()
 
 pages = [
     st.Page(main, title="Home", icon=":material/home:"),
