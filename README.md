@@ -2,6 +2,8 @@
 Developed by Dominick Pelaia, Levi Dunn, Eli Ferency, and Hayden Hellsten for submission to the Presidential AI Challenge
 ## Goal
 This project is designed to provide a platform to help people quickly connect to those willing to help during natural disasters and utilize AI to facilitate improved coordination and awareness of issues.
+## Goal
+This project is designed to provide a platform to help people quickly connect to those willing to help during natural disasters and utilize AI to facilitate improved coordination and awareness of issues.
 ## Project Overview
 This project is a disaster prediction and volunteering coordination portal. It integrates:
 - **UI**: Streamlit
@@ -9,9 +11,16 @@ This project is a disaster prediction and volunteering coordination portal. It i
 - **Map**: Pydeck (utilizes LLM Agent tools and BERT sentiment analysis to create heatmap)
 - **Database**: Supabase 
 - **Coordination**: Volunteering management system trough Supabase and AI recommendations
+- **Chatbot**: QWEN-3 8B LLM Agent with tool calling (NWS Alerts, Google News) and RAG (Retrieval Augmented Generation) significantly increasing the efficacy of our queries
+- **Map**: Pydeck (utilizes LLM Agent tools and BERT sentiment analysis to create heatmap)
+- **Database**: Supabase 
+- **Coordination**: Volunteering management system trough Supabase and AI recommendations
 - **Messaging**: Direct and global messaging through the Supabase Database
 - **Automatic Bounty Generation**: PocketSphinx for audio recording and transcription which is then fed into the chatbot which fits the information and user profile into the correct JSON format which user can then publish
+- **Automatic Bounty Generation**: PocketSphinx for audio recording and transcription which is then fed into the chatbot which fits the information and user profile into the correct JSON format which user can then publish
 
+## Current Architecture
+- `Main`(Home): Streamlit Frontend with Pydeck map that scans for areas impacted by natural disasters with BERT model
 ## Current Architecture
 - `Main`(Home): Streamlit Frontend with Pydeck map that scans for areas impacted by natural disasters with BERT model
 - `pages/1_Login`: Account creation and login via Supabase
@@ -20,19 +29,28 @@ This project is a disaster prediction and volunteering coordination portal. It i
 - `pages/5_Groups`: Global messaging, direct messaging, and leaderboards through Supabase database
 - `app/10_Audio_Recorder`: Records audio, uses PocketSphinx to transcribe audio, feeds text into a chatbot that turns data into a json that user can choose to either submit or edit a request 
 - `app/8_profile`: User profile shows skills, bio, badge, allows managing of bounties, and change password.
+- `app/9_Bounty Board`: Request aid, apply to help, and receive personalized recommendations
+- `pages/2_Chatbot`: Utilizes Hugging Face api key for summaries of reports and relevant natural disaster information through tool calling of API's such as NASA, FEMA, NWS, and Duck Duck Go Search
+- `pages/5_Groups`: Global messaging, direct messaging, and leaderboards through Supabase database
+- `app/10_Audio_Recorder`: Records audio, uses PocketSphinx to transcribe audio, feeds text into a chatbot that turns data into a json that user can choose to either submit or edit a request 
+- `app/8_profile`: User profile shows skills, bio, badge, allows managing of bounties, and change password.
 
 ## How to Run
 - Copy `secrets.toml.example` and rename to `secrets.toml` and plug in our `Supabase URL`, `API key`, and `Hugging Face API Key` (for security purposes)
-- ````bash
+```bash
    pip install -r requirements.txt
+```
 - Then run the streamlit app using:
-- ```bash
+```bash
     streamlit run Main.py`
+```
 - Wait for initial scan in `Main.py`
 
 ## Initial Idea
-- Initial Project Idea
+### Initial Project Idea
 ![Project Diagram](/Images/V1diagram.jpg)
-- Second Project Idea
-![Project Diagram](/Images/V2Presidential%20AI%20Challenge%20Overall%20Framework.jpg)
-- While developing this project we ultimately decided to shift away from prediction as we wanted to focus on solving problems and not have the prediction model distract from them. 
+### Refined Project Idea
+![Project Diagram](/Images/V2%20Presidential%20AI%20Challenge%20Diagram.png)
+- While developing our app, we ultimately decided to scope its capabilities to providing assistance in existing disasters rather than anticipating new ones. Accordingly, we removed features such as the disaster prediction tab in order to focus on this intention.
+## Final Diagram
+![Project Diagram](/Images/Presidential%20AI%20Challenge%20Overall%20Framework.png)
