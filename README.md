@@ -7,14 +7,9 @@ This project is a disaster prediction and volunteering coordination portal. It i
 - **UI**: Streamlit
 - **Chatbot**: QWEN-3 8B LLM Agent with tool calling (NWS Alerts, Google News) and RAG (Retrieval Augmented Generation) significantly increasing the efficacy of our queries
 - **Map**: Pydeck (utilizes LLM Agent tools and BERT sentiment analysis to create heatmap)
-- **Database**: Supabase 
 - **Coordination**: Volunteering management system trough Supabase and AI recommendations
-- **Chatbot**: QWEN-3 8B LLM Agent with tool calling (NWS Alerts, Google News) and RAG (Retrieval Augmented Generation) significantly increasing the efficacy of our queries
-- **Map**: Pydeck (utilizes LLM Agent tools and BERT sentiment analysis to create heatmap)
 - **Database**: Supabase 
-- **Coordination**: Volunteering management system trough Supabase and AI recommendations
 - **Messaging**: Direct and global messaging through the Supabase Database
-- **Automatic Bounty Generation**: PocketSphinx for audio recording and transcription which is then fed into the chatbot which fits the information and user profile into the correct JSON format which user can then publish
 - **Automatic Bounty Generation**: PocketSphinx for audio recording and transcription which is then fed into the chatbot which fits the information and user profile into the correct JSON format which user can then publish
 
 ## Current Architecture
