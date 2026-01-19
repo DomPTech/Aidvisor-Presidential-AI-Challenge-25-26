@@ -262,7 +262,7 @@ class DisasterAgent:
                 messages=messages,
                 tools=tools_schema,
                 tool_choice="auto",
-                max_tokens=500,
+                max_tokens=2000,
             )
             
             response_message = completion.choices[0].message
@@ -332,7 +332,7 @@ class DisasterAgent:
                 final_completion = self.client.chat.completions.create(
                     model=self.model_id,
                     messages=messages,
-                    max_tokens=600,
+                    max_tokens=3000,
                 )
                 final_text = self._clean_response(final_completion.choices[0].message.content)
                 if return_raw:

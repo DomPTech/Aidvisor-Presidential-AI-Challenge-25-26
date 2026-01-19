@@ -6,6 +6,8 @@ import datetime
 import uuid
 import json
 import os
+import csv
+from geopy import distance
 from app.chatbot.bounty_generator import DisasterBountyGenerator
 
 st.set_page_config(page_title="Flooding Coordination - Bounty Board", layout="wide")
@@ -22,6 +24,19 @@ except Exception as e:
     conn = None
 
 # Helper Functions
+
+@st.cache_data
+def load_fips_coords():
+    fips_to_coords = {}
+    csv_path = "data/gis/us_county_latlng_with_state.csv"
+    if os.path.exists(csv_path):
+        with open(csv_path, mode='r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                fips_to_coords[row['fips_code']] = (float(row['lat']), float(row['lng']))
+    return fips_to_coords
+
+fips_to_coords = load_fips_coords()
 
 def load_bounties():
     """Fetch help requests from Supabase."""
@@ -161,6 +176,18 @@ col_community, col_alerts = st.columns([1, 1])
 # Fetch data early to ensure fast rendering
 bounties = load_bounties()
 
+# Get user coords for filtering
+user_id = st.session_state.get("user_id")
+user_coords = None
+if user_id and conn:
+    try:
+        profile_response = conn.table("profiles").select("fips_code").eq("id", user_id).execute()
+        if profile_response.data:
+            user_fips = profile_response.data[0].get('fips_code')
+            user_coords = fips_to_coords.get(str(user_fips))
+    except:
+        pass
+
 # 1. Community Bounties (Supabase) - Show these first on the left
 with col_community:
     row_header = st.columns([3, 1])
@@ -169,7 +196,6 @@ with col_community:
     # "Post Request" Button
     with row_header[1]:
         if st.button("Post", icon=":material/add:"):
-            # Use a dialog for simpler interaction
             @st.dialog("Post Help Request")
             def item_dialog():
                 with st.form("new_bounty_form"):
@@ -189,26 +215,79 @@ with col_community:
 
     st.caption("Real-time requests from users.")
     
-    if not bounties:
-        st.info("No active help requests.")
-    else:
+    @st.fragment
+    def render_community_bounties():
+        # Filtering UI
+        c_filt1, c_filt2 = st.columns(2)
+        with c_filt1:
+            use_search = st.toggle("Enable Search", value=True)
+        with c_filt2:
+            use_radius = st.toggle("Enable Distance Filter", value=False) if user_coords else False
+        
+        search_query = ""
+        if use_search:
+            search_query = st.text_input("🔍 Search Bounties", placeholder="Search by content or type...", label_visibility="collapsed")
+        
+        radius_km = None
+        if use_radius and user_coords:
+            radius_km = st.slider("📍 Search Radius (km)", min_value=1, max_value=5000, value=1000)
+        
+        # Apply Filtering
+        filtered_bounties = []
         for b in bounties:
-            b_id = b['id']
-            volunteers = b.get('current_volunteers', []) or []
-            applicants = b.get('applicants', []) or []
+            # Search filter
+            if use_search and search_query:
+                query = search_query.lower()
+                content = b.get('content', '').lower()
+                d_type = b.get('disaster_type', '').lower()
+                if query not in content and query not in d_type:
+                    continue
+                    
+            # Distance filter
+            if use_radius and radius_km and user_coords:
+                b_coords = (b.get('lat'), b.get('long'))
+                if b_coords[0] is not None and b_coords[1] is not None:
+                    try:
+                        dist = distance.distance(user_coords, b_coords).km
+                        if dist > radius_km:
+                            continue
+                        b['distance_val'] = dist
+                    except:
+                        pass
+            elif not use_radius and user_coords:
+                b_coords = (b.get('lat'), b.get('long'))
+                if b_coords[0] is not None and b_coords[1] is not None:
+                    try:
+                        dist = distance.distance(user_coords, b_coords).km
+                        b['distance_val'] = dist
+                    except:
+                        pass
             
-            card_color = "red" if b['urgency'] > 7 else "orange" if b['urgency'] > 4 else "green"
-            
-            with st.container(border=True):
-                c_main, c_act = st.columns([6, 2])
-                with c_main:
-                    st.markdown(f"**:{card_color}[{b['disaster_type'].upper()}]** • Urgency: {b['urgency']}/10")
-                    st.write(b['content'][:100] + ("..." if len(b['content']) > 100 else ""))
-                    st.caption(f"📍 {b['lat']}, {b['long']} • {len(volunteers)} volunteers")
+            filtered_bounties.append(b)
+
+        if not filtered_bounties:
+            st.info("No active help requests.")
+        else:
+            for b in filtered_bounties:
+                b_id = b['id']
+                volunteers = b.get('current_volunteers', []) or []
+                applicants = b.get('applicants', []) or []
                 
-                with c_act:
-                    if st.button("View", key=f"view_{b_id}"):
-                        show_bounty_details(b)
+                card_color = "red" if b['urgency'] > 7 else "orange" if b['urgency'] > 4 else "green"
+                
+                with st.container(border=True):
+                    c_main, c_act = st.columns([6, 2])
+                    with c_main:
+                        st.markdown(f"**:{card_color}[{b['disaster_type'].upper()}]** • Urgency: {b['urgency']}/10")
+                        st.write(b['content'][:100] + ("..." if len(b['content']) > 100 else ""))
+                        dist_str = f" • {b['distance_val']:.1f}km away" if 'distance_val' in b else ""
+                        st.caption(f"📍 {b['lat']}, {b['long']}{dist_str} • {len(volunteers)} volunteers")
+                    
+                    with c_act:
+                        if st.button("View", key=f"view_{b_id}"):
+                            show_bounty_details(b)
+    
+    render_community_bounties()
 
 # 2. AI System Bounties - Show these on the right
 with col_alerts:
@@ -216,50 +295,61 @@ with col_alerts:
     row_ai[0].subheader("🤖 AI System Bounties")
     
     user_id = st.session_state.get("user_id")
-    force_refresh = False
     
     if user_id:
         with row_ai[1]:
-            if st.button("", icon=":material/refresh:", help="Force Regenerate AI Bounties"):
-                force_refresh = True
+            if st.button("", icon=":material/refresh:", help="Force Regenerate AI Bounties", key="refresh_ai_bounties"):
+                if "force_refresh_ai" not in st.session_state:
+                    st.session_state.force_refresh_ai = False
+                st.session_state.force_refresh_ai = True
 
     st.caption("Intelligently generated based on your location and profile.")
     
-    if not user_id:
-        st.info("Log in to see personalized AI bounties.")
-    else:
-        # Fetch user profile data for context
-        try:
-            profile = conn.table("profiles").select("fips_code, bio").eq("id", user_id).execute()
-            if profile.data:
-                fips = profile.data[0].get('fips_code')
-                bio = profile.data[0].get('bio', '')
-                county_name = get_county_name(fips)
-                
-                with st.spinner("AI is monitoring sources..."):
-                    generator = DisasterBountyGenerator(api_token=st.session_state.get("hf_api_key"))
-                    system_bounties = generator.get_cached_bounties(user_id, fips, bio, county_name, force=force_refresh)
-                
-                if not system_bounties:
-                    st.info("No AI-suggested bounties for your area right now.")
+    @st.fragment
+    def render_ai_bounties():
+        user_id = st.session_state.get("user_id")
+        
+        if not user_id:
+            st.info("Log in to see personalized AI bounties.")
+        else:
+            force_refresh = st.session_state.get("force_refresh_ai", False)
+            if force_refresh:
+                st.session_state.force_refresh_ai = False
+            
+            try:
+                profile = conn.table("profiles").select("fips_code, bio").eq("id", user_id).execute()
+                if profile.data:
+                    fips = profile.data[0].get('fips_code')
+                    bio = profile.data[0].get('bio', '')
+                    county_name = get_county_name(fips)
+                    
+                    with st.spinner("AI is monitoring sources..."):
+                        generator = DisasterBountyGenerator(api_token=st.session_state.get("hf_api_key"))
+                        system_bounties = generator.get_cached_bounties(user_id, fips, bio, county_name, force=force_refresh)
+                    
+                    if not system_bounties:
+                        st.info("No AI-suggested bounties for your area right now.")
+                    else:
+                        for i, sb in enumerate(system_bounties):
+                            with st.expander(f"System: {sb.get('title', 'Bounty')}", expanded=i==0):
+                                st.write(sb.get('description', ''))
+                                st.write(f"**Location:** {sb.get('location', 'Unknown')}")
+                                st.progress(sb.get('urgency', 5) / 10, text=f"Urgency: {sb.get('urgency', 5)}/10")
+                                
+                                contact = sb.get('contact_info', {})
+                                if contact:
+                                    st.markdown("---")
+                                    if contact.get('phone'):
+                                        st.markdown(f"📞 **Phone:** [{contact['phone']}](tel:{contact['phone']})")
+                                    if contact.get('email'):
+                                        st.markdown(f"📧 **Email:** [{contact['email']}](mailto:{contact['email']})")
+                                    if contact.get('link'):
+                                        st.link_button("🌐 More Info", contact['link'], use_container_width=True)
                 else:
-                    for i, sb in enumerate(system_bounties):
-                        with st.expander(f"System: {sb.get('title', 'Bounty')}", expanded=i==0):
-                            st.write(sb.get('description', ''))
-                            st.write(f"**Location:** {sb.get('location', 'Unknown')}")
-                            st.progress(sb.get('urgency', 5) / 10, text=f"Urgency: {sb.get('urgency', 5)}/10")
-                            
-                            contact = sb.get('contact_info', {})
-                            if contact:
-                                st.markdown("---")
-                                if contact.get('phone'):
-                                    st.markdown(f"📞 **Phone:** [{contact['phone']}](tel:{contact['phone']})")
-                                if contact.get('email'):
-                                    st.markdown(f"📧 **Email:** [{contact['email']}](mailto:{contact['email']})")
-                                if contact.get('link'):
-                                    st.link_button("🌐 More Info", contact['link'], use_container_width=True)
-            else:
-                st.warning("Profile not found. Please set up your profile.")
-        except Exception as e:
-            st.error(f"Error loading AI bounties: {e}")
+                    st.warning("Profile not found. Please set up your profile.")
+            except Exception as e:
+                st.error(f"Error loading AI bounties: {e}")
+    
+    render_ai_bounties()
+
 

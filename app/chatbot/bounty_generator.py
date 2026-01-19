@@ -50,7 +50,9 @@ REQUIRED SCHEMA:
     }}
   }}
 ]
-Return ONLY the raw JSON array. No reasoning.
+
+CRITICAL: Return ONLY the raw JSON array with NO markdown formatting, NO code blocks, NO explanations.
+Do NOT wrap in ```json or ``` tags. Just the pure JSON array starting with [ and ending with ].
 """
         # We'll use the agent's tools to find info
         from .tools.ddg_search import get_news_search, get_search
@@ -64,12 +66,44 @@ Return ONLY the raw JSON array. No reasoning.
             "get_fema_disaster_declarations": get_fema_disaster_declarations
         })
         
-        response = self.agent.get_response(prompt)
+        
+        print(f"\n=== AI Bounty Generator Debug ===")
+        print(f"Agent client initialized: {self.agent.client is not None}")
+        
+        try:
+            response = self.agent.get_response(prompt)
+        except Exception as e:
+            print(f"❌ Error calling get_response: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"=== End Debug ===")
+            return []
+        
+        
+        # Check if response is an error message
+        if response.startswith("Error:"):
+            print(f"❌ API Error: {response}")
+            print(f"=== End Debug ===")
+            return []
+        
+        print(f"Raw response length: {len(response)}")
+        print(f"Raw response preview: {response[:500]}...")
         
         try:
             cleaned_response = self.agent._clean_response(response)
+            
+            # Try to extract JSON from markdown code blocks first
+            import re
+            json_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)```', cleaned_response)
+            if json_block_match:
+                cleaned_response = json_block_match.group(1).strip()
+                print(f"Extracted from markdown code block")
+            
+            print(f"Cleaned response preview: {cleaned_response[:500]}...")
+            
             start_idx = cleaned_response.find('[')
             end_idx = cleaned_response.rfind(']')
+            
             
             if start_idx != -1:
                 # If we have a closing bracket, use it as the end
@@ -79,20 +113,34 @@ Return ONLY the raw JSON array. No reasoning.
                     # Truncated: take from start to end of string and attempt repair
                     json_str = cleaned_response[start_idx:]
                 
+                print(f"Attempting to parse JSON of length {len(json_str)}")
+                print(f"Full JSON string: {json_str}")
+                
                 try:
-                    return json.loads(json_str)
-                except json.JSONDecodeError:
+                    result = json.loads(json_str)
+                    print(f"✅ Successfully parsed {len(result)} bounties")
+                    return result
+                except json.JSONDecodeError as e:
+                    print(f"❌ JSON decode error: {e}")
                     # Attempt to repair fragment
                     repaired_json = self.repair_json_fragment(json_str)
                     if repaired_json:
+                        print(f"Repaired JSON: {repaired_json}")
                         try:
-                            return json.loads(repaired_json)
-                        except:
-                            pass
+                            result = json.loads(repaired_json)
+                            print(f"✅ Successfully parsed {len(result)} bounties after repair")
+                            return result
+                        except Exception as e2:
+                            print(f"❌ Failed to parse repaired JSON: {e2}")
+            else:
+                print(f"❌ No JSON array found in response")
+            
+            print(f"=== End Debug ===")
             return []
         except Exception as e:
-            print(f"Error parsing AI bounties: {e}")
+            print(f"❌ Error parsing AI bounties: {e}")
             print(f"Raw response: {response}")
+            print(f"=== End Debug ===")
             return []
 
     def repair_json_fragment(self, json_str):
@@ -140,34 +188,30 @@ Return ONLY the raw JSON array. No reasoning.
         # Now we might be in the middle of a key or value like "contact_info": {"
         # or "urgency": 2, "title": "
         
-        # A more aggressive approach: if the last thing isn't a closing brace/bracket,
-        # try to find the last complete object in the array.
         
         # For our specific schema, we are expecting an array of objects.
-        # Let's try to truncate the string at the last complete object '}'
+        # Find the last complete object '}' and truncate there
         last_object_end = cleaned.rfind('}')
         if last_object_end != -1:
-            # Check if there's an opening [ before it
-            if '[' in cleaned[:last_object_end]:
-                cleaned = cleaned[:last_object_end + 1]
-                # Reset stack for the new truncated string
-                stack = []
-                for char in cleaned:
-                    if char == '[': stack.append('[')
-                    elif char == ']': 
-                        if stack: stack.pop()
-                    elif char == '{': stack.append('{')
-                    elif char == '}':
-                        if stack: stack.pop()
-        
-        # Close remaining stack
-        while stack:
-            opener = stack.pop()
-            if opener == '{':
-                cleaned += '}'
-            elif opener == '[':
+            # Truncate at the last complete object
+            cleaned = cleaned[:last_object_end + 1]
+            
+            # Validate bracket matching by counting
+            open_braces = cleaned.count('{')
+            close_braces = cleaned.count('}')
+            open_brackets = cleaned.count('[')
+            close_brackets = cleaned.count(']')
+            
+            # Remove extra closing braces if any
+            while close_braces > open_braces and cleaned.endswith('}'):
+                cleaned = cleaned[:-1].rstrip()
+                close_braces = cleaned.count('}')
+            
+            # Add missing closing brackets for the array
+            while close_brackets < open_brackets:
                 cleaned += ']'
-                
+                close_brackets += 1
+        
         return cleaned
 
     def get_cached_bounties(self, user_id, fips_code, bio, county_name="Unknown", cache_dir="data/caches", force=False):
