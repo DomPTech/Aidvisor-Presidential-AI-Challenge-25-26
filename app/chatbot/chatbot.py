@@ -18,6 +18,14 @@ class DisasterAgent:
         self.model_id = model_id
         self.tools = tools or {}
         
+        # Add RAG tool by default
+        if "get_rag_context" not in self.tools:
+            try:
+                from app.chatbot.rag_utils import query_vector_store
+                self.tools["get_rag_context"] = query_vector_store
+            except ImportError:
+                print("Warning: Could not import rag_utils. RAG tool will not be available.")
+        
         # Use provided token or fall back to environment variable
         token = api_token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACEHUB_API_TOKEN")
         
@@ -54,9 +62,10 @@ class DisasterAgent:
         system_prompt = (
             "You are a helpful assistant that helps identify areas of most need during natural disaster events. "
             "You are an expert in disaster coordination, volunteering, and donation logistics. "
-            "IMPORTANT: Always search for data using the provided tools (OpenFEMA, DuckDuckGo Search, NWS Alerts) "
-            "before making claims about specific community needs or disaster status. "
-            "If you do not have data from a tool for a specific inquiry about a location's needs, "
+            "IMPORTANT: Always search for up-to-date data using the provided tools (RAG Knowledge Base, OpenFEMA, DuckDuckGo Search, NWS Alerts) "
+            "before making claims about specific community needs, disaster status, or preparedness protocols. "
+            "Use the 'get_rag_context' tool specifically for 2025-2026 preparedness guides, emergency protocols, and general disaster trends. "
+            "If you do not have data from a tool for a specific inquiry about a location's needs or a protocol, "
             "clearly state that you don't have that information instead of speculating or fabricating needs. "
             "Keep answers concise, structured, and helpful."
             f"The year is {date.today().year}."
@@ -154,6 +163,23 @@ class DisasterAgent:
                             }
                         },
                         "required": ["lat", "lon"] 
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_rag_context",
+                    "description": "Get up-to-date (2025-2026) information on natural disaster preparedness, emergency protocols, and disaster trends from the knowledge base.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The specific preparedness topic or disaster trend to search for."
+                            }
+                        },
+                        "required": ["query"] 
                     }
                 }
             },
@@ -273,7 +299,7 @@ class DisasterAgent:
                             tool_result = tool_func(**function_args)
                             print(f"✅ Tool {function_name} returned data.")
                         except Exception as tool_err:
-                            tool_result = f"Error executing tool: {str(e)}"
+                            tool_result = f"Error executing tool: {str(tool_err)}"
                             print(f"❌ Tool {function_name} error: {tool_err}")
                         
                         # Handle structured results for visualizations

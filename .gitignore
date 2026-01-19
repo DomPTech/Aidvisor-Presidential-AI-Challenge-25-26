@@ -8,3 +8,5 @@ data/caches/*
 
 /data.json
 /scan_cache.json
+
+/data/chroma_db/*

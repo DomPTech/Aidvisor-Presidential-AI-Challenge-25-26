@@ -245,7 +245,7 @@ if "global_agent" not in st.session_state:
     st.session_state.global_agent = None
 
 
-if pg.title != "Login":
+if pg.title != "Login" and st.session_state.get("user_id") != None:
     chatbot_widget()
 
 pg.run()
