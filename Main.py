@@ -78,7 +78,6 @@ def heatmap():
         
         if cache_valid:
             with st.sidebar:
-                st.divider()
                 st.success("Using cached scan data")
                 minutes_ago = int(time_since_scan.total_seconds() / 60)
                 st.caption(f"Last scanned {minutes_ago} minutes ago")
@@ -90,7 +89,6 @@ def heatmap():
         scanner = DisasterScanner()
         
         with st.sidebar:
-            st.divider()
             st.subheader("Background Scanning...")
             progress_bar = st.progress(st.session_state.scan_index / len(st.session_state.scan_queries))
             status_text = st.empty()

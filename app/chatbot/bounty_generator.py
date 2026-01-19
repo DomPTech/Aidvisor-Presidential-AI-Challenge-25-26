@@ -30,7 +30,7 @@ TASK:
 3. Synthesize your findings into a list of "System Bounties".
 
 GUIDELINES:
-- Focus on ACTIVE or RECENT natural disasters (e.g., winter storms, floods, drought, wildfires).
+- Focus on ACTIVE or RECENT natural disasters WITHIN A MONTH FROM NOW {datetime.datetime.now().strftime("%Y-%m-%d")} (e.g., winter storms, floods, drought, wildfires).
 - Look for official Executive Orders, SBA disaster loans, or Red Cross/Salvation Army response efforts.
 - DO NOT invent data. If you find a real event but no phone/email, leave those fields empty.
 - Every 'link' MUST be a real URL from your search results.
@@ -145,74 +145,88 @@ Do NOT wrap in ```json or ``` tags. Just the pure JSON array starting with [ and
 
     def repair_json_fragment(self, json_str):
         """
-        Attempts to repair a truncated JSON string by closing open brackets/braces
-        and removing trailing commas or incomplete keys/values.
+        Attempts to repair a malformed JSON string by:
+        1. Fixing unbalanced brackets/braces
+        2. Removing trailing commas
+        3. Fixing nested bracket issues
         """
         if not json_str:
             return ""
-            
-        # 1. Basic stack-based bracket closer
-        stack = []
-        in_string = False
-        escape = False
-        
-        # We'll build a "valid-ish" prefix by finding the last complete object we can
-        # but first let's try the simple "close everything" approach
         
         cleaned = json_str.strip()
         
         # Remove trailing comma if exists
         if cleaned.endswith(','):
             cleaned = cleaned[:-1]
-            
-        # Track brackets
-        for char in cleaned:
-            if char == '"' and not escape:
-                in_string = not in_string
-            elif not in_string:
-                if char == '{' or char == '[':
-                    stack.append(char)
-                elif char == '}' or char == ']':
-                    if stack:
-                        stack.pop()
-            
-            if char == '\\' and not escape:
-                escape = True
-            else:
-                escape = False
         
-        # If we are inside a string, close it
-        if in_string:
-            cleaned += '"'
+        # Fix the specific issue: extra closing braces
+        # We'll validate bracket matching more carefully
+        try:
+            # Try a character-by-character validation approach
+            stack = []
+            in_string = False
+            escape = False
+            valid_chars = []
             
-        # Now we might be in the middle of a key or value like "contact_info": {"
-        # or "urgency": 2, "title": "
-        
-        
-        # For our specific schema, we are expecting an array of objects.
-        # Find the last complete object '}' and truncate there
-        last_object_end = cleaned.rfind('}')
-        if last_object_end != -1:
-            # Truncate at the last complete object
-            cleaned = cleaned[:last_object_end + 1]
+            for i, char in enumerate(cleaned):
+                # Track string state
+                if char == '"' and not escape:
+                    in_string = not in_string
+                    valid_chars.append(char)
+                elif in_string:
+                    # Inside string, keep everything
+                    valid_chars.append(char)
+                else:
+                    # Outside string, validate brackets
+                    if char in '[{':
+                        stack.append(char)
+                        valid_chars.append(char)
+                    elif char == '}':
+                        # Check if we should close a brace
+                        if stack and stack[-1] == '{':
+                            stack.pop()
+                            valid_chars.append(char)
+                        else:
+                            # Extra closing brace, skip it
+                            print(f"Skipping extra '}}' at position {i}")
+                            continue
+                    elif char == ']':
+                        # Check if we should close a bracket
+                        if stack and stack[-1] == '[':
+                            stack.pop()
+                            valid_chars.append(char)
+                        else:
+                            # Extra closing bracket, skip it
+                            print(f"Skipping extra ']' at position {i}")
+                            continue
+                    else:
+                        valid_chars.append(char)
+                
+                # Track escape sequences
+                if char == '\\' and not escape:
+                    escape = True
+                else:
+                    escape = False
             
-            # Validate bracket matching by counting
-            open_braces = cleaned.count('{')
-            close_braces = cleaned.count('}')
-            open_brackets = cleaned.count('[')
-            close_brackets = cleaned.count(']')
+            # Close any remaining open brackets
+            while stack:
+                opener = stack.pop()
+                if opener == '{':
+                    valid_chars.append('}')
+                elif opener == '[':
+                    valid_chars.append(']')
             
-            # Remove extra closing braces if any
-            while close_braces > open_braces and cleaned.endswith('}'):
-                cleaned = cleaned[:-1].rstrip()
-                close_braces = cleaned.count('}')
+            repaired = ''.join(valid_chars)
             
-            # Add missing closing brackets for the array
-            while close_brackets < open_brackets:
-                cleaned += ']'
-                close_brackets += 1
-        
-        return cleaned
+            # Final cleanup: remove trailing commas before closing brackets
+            import re
+            repaired = re.sub(r',\s*([}\]])', r'\1', repaired)
+            
+            return repaired
+            
+        except Exception as e:
+            print(f"Error during repair: {e}")
+            return cleaned
 
     def get_cached_bounties(self, user_id, fips_code, bio, county_name="Unknown", cache_dir="data/caches", force=False):
         """

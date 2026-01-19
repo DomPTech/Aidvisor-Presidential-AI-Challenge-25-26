@@ -9,12 +9,15 @@ import os
 import csv
 from geopy import distance
 from app.chatbot.bounty_generator import DisasterBountyGenerator
+from app.chatbot.bounty_matcher import DisasterBountyMatcher
+import hashlib
 
 st.set_page_config(page_title="Flooding Coordination - Bounty Board", layout="wide")
 session_init.init_session_state()
 
 st.title("Disaster Bounty Board")
 st.markdown("Connect with real-time needs and system-generated alerts.")
+st.divider()
 
 # Initialize Supabase Connection
 try:
@@ -171,7 +174,76 @@ def get_county_name(fips_code):
         pass
     return "Unknown"
 
-col_community, col_alerts = st.columns([1, 1])
+def anonymize_bounty_id(bounty_id):
+    """Create a consistent hash of bounty ID for anonymization."""
+    return hashlib.sha256(str(bounty_id).encode()).hexdigest()[:16]
+
+def get_best_match_via_ai():
+    """Use AI chatbot to find the best bounty match for the user."""
+    user_id = st.session_state.get("user_id")
+    if not user_id or not conn:
+        st.warning("Please log in to use AI matching.")
+        return None
+    
+    try:
+        # Get user profile
+        profile = conn.table("profiles").select("fips_code, bio, skills").eq("id", user_id).execute()
+        if not profile.data:
+            st.warning("Please set up your profile first.")
+            return None
+        
+        user_data = profile.data[0]
+        user_fips = user_data.get('fips_code')
+        user_coords = fips_to_coords.get(str(user_fips))
+        
+        # Prepare anonymized bounty data
+        anonymized_bounties = []
+        id_mapping = {}  # Maps anonymous IDs back to real IDs
+        
+        for b in bounties:
+            anon_id = anonymize_bounty_id(b['id'])
+            id_mapping[anon_id] = b['id']
+            
+            # Calculate distance if possible
+            dist = None
+            if user_coords and b.get('lat') and b.get('long'):
+                try:
+                    dist = distance.distance(user_coords, (b['lat'], b['long'])).km
+                except:
+                    pass
+            
+            anonymized_bounties.append({
+                "id": anon_id,
+                "disaster_type": b.get('disaster_type'),
+                "urgency": b.get('urgency'),
+                "content": b.get('content'),
+                "distance_km": dist,
+                "volunteers_count": len(b.get('current_volunteers', []) or []),
+                "applicants_count": len(b.get('applicants', []) or [])
+            })
+        
+        if not anonymized_bounties:
+            st.info("No bounties available to match.")
+            return None
+        
+        # Use AI matcher
+        matcher = DisasterBountyMatcher(api_token=st.session_state.get("hf_api_key"))
+        best_match_anon_id = matcher.find_best_match(
+            user_profile=user_data,
+            bounties=anonymized_bounties,
+            county_name=get_county_name(user_fips)
+        )
+        
+        if best_match_anon_id and best_match_anon_id in id_mapping:
+            return id_mapping[best_match_anon_id]
+        
+        return None
+        
+    except Exception as e:
+        st.error(f"Error during AI matching: {e}")
+        return None
+
+col_community, col_middle, col_alerts = st.columns([8, 1, 8])
 
 # Fetch data early to ensure fast rendering
 bounties = load_bounties()
@@ -188,14 +260,31 @@ if user_id and conn:
     except:
         pass
 
-# 1. Community Bounties (Supabase) - Show these first on the left
+# Community Bounties (Supabase)
 with col_community:
-    row_header = st.columns([3, 1])
+    row_header = st.columns([2, 1, 1])
     row_header[0].subheader(":material/sos: Community Bounties")
     
-    # "Post Request" Button
+    # "AI Match" Button
     with row_header[1]:
-        if st.button("Post", icon=":material/add:"):
+        if st.button("🤖 AI Match", help="Use AI to find your best bounty match", width="stretch"):
+            with st.spinner("AI is analyzing bounties for you..."):
+                best_match_id = get_best_match_via_ai()
+                if best_match_id:
+                    # Find the bounty and show details
+                    matched_bounty = next((b for b in bounties if b['id'] == best_match_id), None)
+                    if matched_bounty:
+                        st.toast("Found your best match!")
+                        st.balloons()
+                        show_bounty_details(matched_bounty)
+                    else:
+                        st.toast("Match found but bounty no longer available.")
+                else:
+                    st.toast("No strong matches found. Try browsing manually.")
+    
+    # "Post Request" Button
+    with row_header[2]:
+        if st.button("Post", icon=":material/add:", width="stretch"):
             @st.dialog("Post Help Request")
             def item_dialog():
                 with st.form("new_bounty_form"):
@@ -289,16 +378,19 @@ with col_community:
     
     render_community_bounties()
 
-# 2. AI System Bounties - Show these on the right
+with col_middle:
+    st.space(size="small")
+
+# AI System Bounties
 with col_alerts:
-    row_ai = st.columns([3, 1])
+    row_ai = st.columns([5, 1])
     row_ai[0].subheader("🤖 AI System Bounties")
     
     user_id = st.session_state.get("user_id")
     
     if user_id:
         with row_ai[1]:
-            if st.button("", icon=":material/refresh:", help="Force Regenerate AI Bounties", key="refresh_ai_bounties"):
+            if st.button("", icon=":material/refresh:", help="Force Regenerate AI Bounties", key="refresh_ai_bounties", width="stretch"):
                 if "force_refresh_ai" not in st.session_state:
                     st.session_state.force_refresh_ai = False
                 st.session_state.force_refresh_ai = True
@@ -351,5 +443,3 @@ with col_alerts:
                 st.error(f"Error loading AI bounties: {e}")
     
     render_ai_bounties()
-
-
