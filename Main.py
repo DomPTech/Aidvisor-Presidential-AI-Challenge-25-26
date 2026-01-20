@@ -228,7 +228,7 @@ def main():
     
     with head_col1:
         try:
-            st.image("Images/Presidential_AI_Challenge_Logo.png", width=160)
+            st.image("Images/Presidential_Ai_Challenge_Logo.png", width=160)
         except:
             # Fallback icon if image is missing
             st.warning("⚠️ Logo missing")
