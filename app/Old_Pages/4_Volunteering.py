@@ -74,7 +74,6 @@ if action_mode == "Volunteer & Help":
                     data["users"][st.session_state.username]["history"].append({
                         "activity": f"Volunteered at {location}", "points": 10, "date": str(sel_date)
                     })
-
                     if target_user:
                         data["notifications"].append({
                             "from": st.session_state.username,

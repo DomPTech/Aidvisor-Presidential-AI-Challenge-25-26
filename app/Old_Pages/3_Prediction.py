@@ -24,7 +24,7 @@ with col1:
             # Fetch data from tools
             recent_news = get_news_search(scan_query)
             
-            # Extract texts to scan
+            # Extract texts and scan
             texts_to_scan = [line.strip() for line in recent_news.split("\n\n") if line.strip()]
             
             # Instantiate Local Scanner

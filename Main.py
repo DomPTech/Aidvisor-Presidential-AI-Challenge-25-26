@@ -264,7 +264,6 @@ def main():
                 delta="+3.9% from 2023",
                 help="Source: Independent Sector & Do Good Institute (April 2025 Release)"
             )
-        
         with m3:
             st.metric(
                 label="Wasted Volunteer Capacity",
@@ -284,10 +283,10 @@ def main():
 pages = [
     st.Page(main, title="Home", icon=":material/home:"),
     st.Page("pages/1_Login.py", title="Login", icon=":material/login:"),
-    st.Page("pages/9_Bounty_Board.py", title="Bounty Board", icon=":material/assignment:"),
-    st.Page("pages/2_Chatbot.py", title="Chatbot", icon=":material/chat:"),
+    st.Page("pages/2_Bounty_Board.py", title="Bounty Board", icon=":material/assignment:"),
+    st.Page("pages/3_Chatbot.py", title="Chatbot", icon=":material/chat:"),
     st.Page("pages/5_Groups.py", title="Groups", icon=":material/groups:"),
-    st.Page("pages/10_Audio_Recorder.py", title="Audio Recorder", icon=":material/mic:"),
+    st.Page("pages/6_Audio_Recorder.py", title="Audio Recorder", icon=":material/mic:"),
     st.Page("pages/8_Profile.py", title="Profile", icon=":material/person:"),
 ]
 

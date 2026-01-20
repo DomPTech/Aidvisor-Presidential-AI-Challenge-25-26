@@ -27,7 +27,6 @@ st.header(f"🔔 Notifications ({unread_count})")
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("Novita API Key", value=st.session_state.get("hf_api_key", ""),
                                                 type="password")
-
 profiles = {}
 if conn:
     try:

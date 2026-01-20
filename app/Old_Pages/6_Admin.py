@@ -9,7 +9,6 @@ session_init.init_session_state()
 with st.sidebar:
     st.session_state.hf_api_key = st.text_input("Novita API Key", value=st.session_state.hf_api_key,
                                                 type="password")
-
 if st.session_state.username == "admin":
     st.header("🛠️ Admin Control Panel")
     data = load_data()

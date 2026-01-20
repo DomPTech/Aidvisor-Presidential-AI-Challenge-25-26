@@ -14,7 +14,6 @@ web_gpu_available = True
 # except Exception as e:
 #     print(f"WebGPU not available via wgpu-py: {e}")
 #     web_gpu_available = False
-
 st.set_page_config(page_title="Flooding Coordination - Database Chatbot", layout="wide")
 
 session_init.init_session_state()
