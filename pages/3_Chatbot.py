@@ -6,6 +6,7 @@ from app.chatbot.tools.openfema import get_fema_disaster_declarations, get_fema_
 from app.chatbot.tools.nasa_eonet import get_nasa_eonet_events
 import app.initialize as session_init
 from st_supabase_connection import SupabaseConnection
+from typing import Generator
 
 try:
     import pandas as pd
@@ -89,34 +90,65 @@ def handle_chat(new_prompt):
     render_message("user", prompt)
     
     agent = get_agent()
+    
     with st.chat_message("assistant"):
-        with st.spinner("Consulting disaster databases..."):
-            res = agent.get_response(prompt, history=[
+        # 1. Initialize placeholders for streaming
+        status_placeholder = st.empty()
+        text_placeholder = st.empty()
+        
+        full_response_text = ""
+        collected_visuals = []
+        
+        # Add a check to ensure history is only built if there are previous messages
+        history_data = []
+        if len(st.session_state.messages) > 1:
+            history_data = [
                 {"role": m["role"], "content": m["content"]["text"] if isinstance(m["content"], dict) else m["content"]}
                 for m in st.session_state.messages[:-1]
-            ], return_raw=True)
-        
-        # Helper to render visuals and text from response
-        if isinstance(res, str):
-            st.markdown(res)
-        else:
-            st.markdown(res["text"])
-            for visual in res.get("visuals", []):
-                if not HAS_VISUALS:
-                    st.warning("Install `plotly` and `pandas` to see maps and charts: `pip install plotly pandas`")
-                    break
-                if visual["type"] == "map":
-                    df = pd.DataFrame(visual["data"])
-                    st.map(df)
-                elif visual["type"] == "chart":
-                    df = pd.DataFrame(visual["data"])
-                    fig = px.bar(df, x="Location", y="Approved Funding ($)", 
-                                title="FEMA Approved Funding by Location",
-                                hover_data=["Registrations"])
-                    st.plotly_chart(fig, width="stretch")
-                
-    st.session_state.messages.append({"role": "assistant", "content": res})
+            ]
 
+        # Call the stream with the safer history_data
+        res_generator = agent.get_response_stream(
+            prompt, 
+            history=history_data, 
+            return_raw=True
+        )
+        
+        # Iterate through the generator
+        for chunk in res_generator:
+            if chunk["type"] == "status":
+                # Update a small status line (e.g., "Using tool: get_search...")
+                status_placeholder.markdown(f"*{chunk['data']}*")
+                
+            elif chunk["type"] == "text":
+                # Clear status when text starts flowing
+                status_placeholder.empty()
+                full_response_text += chunk["data"]
+                text_placeholder.markdown(full_response_text + "▌")
+            
+            elif chunk["type"] == "visual":
+                visual = chunk["data"]
+                collected_visuals.append(visual)
+                
+                # Render visual immediately as it's yielded
+                if not HAS_VISUALS:
+                    st.warning("Install `plotly` and `pandas` to see maps.")
+                else:
+                    if visual["type"] == "map":
+                        st.map(pd.DataFrame(visual["data"]))
+                    elif visual["type"] == "chart":
+                        df = pd.DataFrame(visual["data"])
+                        fig = px.bar(df, x="Location", y="Approved Funding ($)", title="Funding")
+                        st.plotly_chart(fig)
+
+        # Final Polish: remove the cursor from the text
+        text_placeholder.markdown(full_response_text)
+                
+    # Store in history (matching the structure your agent expects)
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "content": {"text": full_response_text, "visuals": collected_visuals}
+    })
 
 # Display chat history
 if st.session_state.messages:
