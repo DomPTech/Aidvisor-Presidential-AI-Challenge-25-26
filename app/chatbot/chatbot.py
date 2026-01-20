@@ -256,92 +256,95 @@ class DisasterAgent:
         ]
         
         try:
-            # First API call
-            completion = self.client.chat.completions.create(
-                model=self.model_id,
-                messages=messages,
-                tools=tools_schema,
-                tool_choice="auto",
-                max_tokens=2000,
-            )
-            
-            response_message = completion.choices[0].message
             collected_visuals = []
+            max_iterations = 5
             
-            # Check if the model wants to call a tool
-            if response_message.tool_calls:
-                # Add the assistant's response (with tool calls) to history
-                messages.append(response_message)
-                
-                # Process each tool call
-                for tool_call in response_message.tool_calls:
-                    function_name = tool_call.function.name
-                    raw_args = tool_call.function.arguments
-                    
-                    try:
-                        function_args = self._safe_json_loads(raw_args)
-                    except Exception as json_err:
-                        print(f"Error parsing tool arguments for {function_name}: {json_err}")
-                        print(f"Raw arguments: {raw_args}")
-                        messages.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": f"Error: Invalid JSON arguments returned by model for tool '{function_name}'.",
-                        })
-                        continue
-
-                    if function_name in self.tools:
-                        # Execute tool
-                        tool_func = self.tools[function_name]
-                        print(f"🤖 AI calling tool: {function_name} with args: {function_args}")
-                        try:
-                            tool_result = tool_func(**function_args)
-                            print(f"✅ Tool {function_name} returned data.")
-                        except Exception as tool_err:
-                            tool_result = f"Error executing tool: {str(tool_err)}"
-                            print(f"❌ Tool {function_name} error: {tool_err}")
-                        
-                        # Handle structured results for visualizations
-                        if isinstance(tool_result, dict):
-                            summary = tool_result.get("summary", str(tool_result))
-                            visual = tool_result.get("visuals")
-                            if visual:
-                                collected_visuals.append(visual)
-                            tool_content = summary
-                        else:
-                            tool_content = str(tool_result)
-
-                        # Add tool result to messages
-                        messages.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": tool_content,
-                        })
-                    else:
-                        # Handle unknown tool
-                        messages.append({
-                            "tool_call_id": tool_call.id,
-                            "role": "tool",
-                            "name": function_name,
-                            "content": f"Error: Tool '{function_name}' not found.",
-                        })
-                
-                # Second API call to get the final response
-                final_completion = self.client.chat.completions.create(
+            # Loop allowing up to 5 consecutive model calls with tool execution
+            for iteration in range(max_iterations):
+                # Make API call
+                completion = self.client.chat.completions.create(
                     model=self.model_id,
                     messages=messages,
-                    max_tokens=3000,
+                    tools=tools_schema,
+                    tool_choice="auto",
+                    max_tokens=2000,
                 )
-                final_text = self._clean_response(final_completion.choices[0].message.content)
-                if return_raw:
-                    return {"text": final_text, "visuals": collected_visuals}
-                return final_text
+                
+                response_message = completion.choices[0].message
+                
+                # Check if the model wants to call a tool
+                if response_message.tool_calls:
+                    # Add the assistant's response (with tool calls) to history
+                    messages.append(response_message)
+                    
+                    # Process each tool call
+                    for tool_call in response_message.tool_calls:
+                        function_name = tool_call.function.name
+                        raw_args = tool_call.function.arguments
+                        
+                        try:
+                            function_args = self._safe_json_loads(raw_args)
+                        except Exception as json_err:
+                            print(f"Error parsing tool arguments for {function_name}: {json_err}")
+                            print(f"Raw arguments: {raw_args}")
+                            messages.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": f"Error: Invalid JSON arguments returned by model for tool '{function_name}'.",
+                            })
+                            continue
+
+                        if function_name in self.tools:
+                            # Execute tool
+                            tool_func = self.tools[function_name]
+                            print(f"🤖 AI calling tool: {function_name} with args: {function_args}")
+                            try:
+                                tool_result = tool_func(**function_args)
+                                print(f"✅ Tool {function_name} returned data.")
+                            except Exception as tool_err:
+                                tool_result = f"Error executing tool: {str(tool_err)}"
+                                print(f"❌ Tool {function_name} error: {tool_err}")
+                            
+                            # Handle structured results for visualizations
+                            if isinstance(tool_result, dict):
+                                summary = tool_result.get("summary", str(tool_result))
+                                visual = tool_result.get("visuals")
+                                if visual:
+                                    collected_visuals.append(visual)
+                                tool_content = summary
+                            else:
+                                tool_content = str(tool_result)
+
+                            # Add tool result to messages
+                            messages.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": tool_content,
+                            })
+                        else:
+                            # Handle unknown tool
+                            messages.append({
+                                "tool_call_id": tool_call.id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": f"Error: Tool '{function_name}' not found.",
+                            })
+                    
+                    # Continue to next iteration to allow more tool calls
+                    continue
+                else:
+                    # Model didn't call a tool, return the final response
+                    final_text = self._clean_response(response_message.content)
+                    if return_raw:
+                        return {"text": final_text, "visuals": collected_visuals}
+                    return final_text
             
+            # If we've exhausted max iterations, return the last response
             final_text = self._clean_response(response_message.content)
             if return_raw:
-                return {"text": final_text, "visuals": []}
+                return {"text": final_text, "visuals": collected_visuals}
             return final_text
 
         except Exception as e:
