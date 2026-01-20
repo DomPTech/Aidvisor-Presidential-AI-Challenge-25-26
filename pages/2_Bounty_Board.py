@@ -137,7 +137,7 @@ def show_bounty_details(b):
     
     with col1:
         if not is_creator and st.button("📩 DM Creator", key=f"dm_{b['id']}"):
-            st.switch_page("pages/5_Groups.py", query_params={"dm_id": b['poster_id']})
+            st.switch_page("pages/4_Groups.py", query_params={"dm_id": b['poster_id']})
             
     with col2:
         applicants = b.get('applicants', []) or []

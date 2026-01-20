@@ -307,10 +307,10 @@ pages = [
     st.Page("pages/2_Bounty_Board.py", title="Bounty Board",
             icon=":material/assignment:"),
     st.Page("pages/3_Chatbot.py", title="Chatbot", icon=":material/chat:"),
-    st.Page("pages/5_Groups.py", title="Groups", icon=":material/groups:"),
-    st.Page("pages/6_Audio_Recorder.py",
+    st.Page("pages/4_Groups.py", title="Groups", icon=":material/groups:"),
+    st.Page("pages/5_Audio_Recorder.py",
             title="Audio Recorder", icon=":material/mic:"),
-    st.Page("pages/8_Profile.py", title="Profile", icon=":material/person:"),
+    st.Page("pages/6_Profile.py", title="Profile", icon=":material/person:"),
 ]
 
 pg = st.navigation(pages)

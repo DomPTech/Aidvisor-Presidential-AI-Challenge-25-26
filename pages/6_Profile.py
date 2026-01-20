@@ -262,7 +262,7 @@ try:
                         
                         with c4:
                             if st.button("Message", key=f"dm_{b['id']}_{app_id}", use_container_width=True):
-                                st.switch_page("pages/5_Groups.py", query_params={"dm_id": app_id})
+                                st.switch_page("pages/4_Groups.py", query_params={"dm_id": app_id})
                 else:
                     st.caption("No pending applicants.")
                 
@@ -278,7 +278,7 @@ try:
                         
                         with c2:
                             if st.button("Message", key=f"dm_vol_{b['id']}_{vol_id}", use_container_width=True):
-                                st.switch_page("pages/5_Groups.py", query_params={"dm_id": vol_id})
+                                st.switch_page("pages/4_Groups.py", query_params={"dm_id": vol_id})
                         
                         with c3:
                             if st.button("Remove", type="primary", key=f"kick_{b['id']}_{vol_id}", use_container_width=True):
