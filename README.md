@@ -25,8 +25,8 @@ This project is a disaster prediction and volunteering coordination portal. It i
 ### Setup
 - Run the following commands from the directory where you want to install the project:
 ```bash
-git clone https://github.com/DomPTech/AIdvisor-Presidential-AI-Challenge-25-26
-cd AIdvisor-Presidential-AI-Challenge-25-26
+git clone https://github.com/DomPTech/Aidvisor-Presidential-AI-Challenge-25-26.git
+cd Aidvisor-Presidential-AI-Challenge-25-26
 cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 pip install -r requirements.txt
 
