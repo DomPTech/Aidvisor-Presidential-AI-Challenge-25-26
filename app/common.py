@@ -254,9 +254,8 @@ def create_pydeck_map(scan_results=None, nasa_events=None):
         }
     )
 
+import app.auth as auth
+
 def sign_out():
-    if st.session_state.get("user_id"):
-        st.session_state.logged_in = False
-        st.session_state.username = None
-        st.session_state.user_id = None
-        st.switch_page("pages/1_Login.py")
+    auth.logout()
+    st.switch_page("pages/1_Login.py")

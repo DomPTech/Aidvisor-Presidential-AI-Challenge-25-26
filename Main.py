@@ -14,6 +14,7 @@ from app.common import load_scan_cache, save_scan_cache, create_pydeck_map, sign
 import app.initialize as session_init
 from st_supabase_connection import SupabaseConnection
 import json
+import app.auth as auth
 
 st.set_page_config(page_title="Home", layout="wide")
 float_init()
@@ -320,17 +321,14 @@ if pg.title != "Login":
     _, col_right = st.columns([9, 1])  # adjust ratio for spacing
 
     with col_right:
-        if not st.session_state.get("user_id"):
+        if not auth.get_authenticated_user():
             if st.button("Login"):
                 st.switch_page("pages/1_Login.py")
         else:
-            conn = st.connection("supabase", type=SupabaseConnection)
             if st.button("Logout"):
-                try:
-                    conn.auth.sign_out()
-                except:
-                    pass
-                sign_out()
+                auth.logout()
+                sign_out() # Keep existing clean up if valid
+                st.rerun()
 
 # Initialize chat state
 if "global_messages" not in st.session_state:

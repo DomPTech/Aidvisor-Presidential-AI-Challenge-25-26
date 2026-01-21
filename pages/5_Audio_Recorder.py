@@ -8,6 +8,7 @@ import json
 import warnings
 from app.chatbot.chatbot import DisasterAgent
 from st_supabase_connection import SupabaseConnection
+import app.auth as auth
 
 # Suppress pydub RuntimeWarning if ffmpeg is not found
 with warnings.catch_warnings():
@@ -166,7 +167,8 @@ If any field cannot be determined from the transcription, use reasonable default
     with col1:
         if st.button("Post to Bounty Board", key="post_bounty"):
             # Check for user login
-            user_id = st.session_state.get("user_id")
+            user = auth.get_authenticated_user()
+            user_id = user['id'] if user else None
             if not user_id:
                 st.error("You must be logged in to post bounties.")
             else:

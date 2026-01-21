@@ -15,6 +15,8 @@ try:
 except ImportError:
     HAS_VISUALS = False
 
+import app.auth as auth
+
 st.set_page_config(page_title="Disaster Chatbot", layout="wide")
 
 session_init.init_session_state()
@@ -23,10 +25,12 @@ prompt = None
 
 st.title("Disaster Chatbot")
 
-user_id = st.session_state.get("user_id")
-if user_id is None:
+# Auth Check
+user_info = auth.get_authenticated_user()
+if not user_info:
     st.error("You must be logged in.")
     st.stop()
+user_id = user_info['id']
 
 # Sidebar controls
 with st.sidebar:

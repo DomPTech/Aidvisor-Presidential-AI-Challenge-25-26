@@ -11,6 +11,7 @@ from geopy import distance
 from app.chatbot.bounty_generator import DisasterBountyGenerator
 from app.chatbot.bounty_matcher import DisasterBountyMatcher
 import hashlib
+import app.auth as auth
 
 st.set_page_config(page_title="Flooding Coordination - Bounty Board", layout="wide")
 session_init.init_session_state()
@@ -41,19 +42,23 @@ def load_fips_coords():
 
 fips_to_coords = load_fips_coords()
 
+def get_current_user_id():
+    user = auth.get_authenticated_user()
+    return user['id'] if user else None
+
 def load_bounties():
     """Fetch help requests from Supabase."""
     if not conn:
         return []
     try:
-        user_id = st.session_state.get("user_id")
+        user_id = get_current_user_id()
         if user_id:
             response = conn.table("help_requests").select("*").neq("poster_id", user_id).order("created_at", desc=True).execute()
             # Filter out bounties where user is already a volunteer or applicant
             filtered_data = [
                 b for b in response.data 
-                if st.session_state.get("user_id") not in (b.get('current_volunteers') or []) 
-                and st.session_state.get("user_id") not in (b.get('applicants') or [])
+                if user_id not in (b.get('current_volunteers') or []) 
+                and user_id not in (b.get('applicants') or [])
             ]
             return filtered_data
         else:
@@ -65,7 +70,7 @@ def load_bounties():
 
 def post_bounty(content, lat, lon, disaster_type, urgency):
     """Post a new help request to Supabase."""
-    user_id = st.session_state.get("user_id")
+    user_id = get_current_user_id()
     if not user_id:
         st.error("You must be logged in to post.")
         return False
@@ -91,7 +96,7 @@ def post_bounty(content, lat, lon, disaster_type, urgency):
 
 def apply_for_bounty(bounty_id, current_applicants):
     """Add current user to applicants list."""
-    user_id = st.session_state.get("user_id")
+    user_id = get_current_user_id()
     if not user_id:
         st.warning("Please log in to apply.")
         return False
@@ -118,7 +123,7 @@ def apply_for_bounty(bounty_id, current_applicants):
 
 @st.dialog("Bounty Details")
 def show_bounty_details(b):
-    user_id = st.session_state.get("user_id")
+    user_id = get_current_user_id()
     
     st.subheader(f"{b['disaster_type']} - Urgency: {b['urgency']}/10")
     st.write(b['content'])
@@ -180,7 +185,7 @@ def anonymize_bounty_id(bounty_id):
 
 def get_best_match_via_ai():
     """Use AI chatbot to find the best bounty match for the user."""
-    user_id = st.session_state.get("user_id")
+    user_id = get_current_user_id()
     if not user_id or not conn:
         st.warning("Please log in to use AI matching.")
         return None
@@ -249,7 +254,7 @@ col_community, col_middle, col_alerts = st.columns([8, 1, 8])
 bounties = load_bounties()
 
 # Get user coords for filtering
-user_id = st.session_state.get("user_id")
+user_id = get_current_user_id()
 user_coords = None
 if user_id and conn:
     try:
@@ -386,7 +391,7 @@ with col_alerts:
     row_ai = st.columns([5, 1])
     row_ai[0].subheader("🤖 AI System Bounties")
     
-    user_id = st.session_state.get("user_id")
+    user_id = get_current_user_id()
     
     if user_id:
         with row_ai[1]:
@@ -399,7 +404,7 @@ with col_alerts:
     
     @st.fragment
     def render_ai_bounties():
-        user_id = st.session_state.get("user_id")
+        user_id = get_current_user_id()
         
         if not user_id:
             st.info("Log in to see personalized AI bounties.")

@@ -3,13 +3,11 @@ import certifi
 import os
 from st_supabase_connection import SupabaseConnection
 import app.initialize as session_init
+import app.auth as auth
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 
-conn = st.connection("supabase", type=SupabaseConnection)
-
-st.set_page_config(page_title="Flooding Coordination - Login", layout="wide")
-
+# Initialize Session
 session_init.init_session_state()
 
 st.title("Login")
@@ -18,26 +16,18 @@ with t2:
     email = st.text_input("Email", key="signup_email")
     password = st.text_input("Password", type="password", key="signup_password")
     if st.button("Register"):
-        try:
-            response = conn.auth.sign_up({"email": email, "password": password})
-            if response.user:
-                st.success("Account created! You can now sign in.")
-            else:
-                st.error("Sign up failed.")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+        success, msg = auth.sign_up(email, password)
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
+
 with t1:
     email = st.text_input("Email", key="signin_email")
     password = st.text_input("Password", type="password", key="signin_password")
     if st.button("Sign In"):
-        try:
-            response = conn.auth.sign_in_with_password({"email": email, "password": password})
-            if response.user:
-                st.session_state.logged_in = True
-                st.session_state.username = response.user.email
-                st.session_state.user_id = response.user.id
-                st.switch_page("pages/6_Profile.py")
-            else:
-                st.error("Sign in failed.")
-        except Exception as e:
-            st.error(f"Error: {str(e)}")
+        success, msg = auth.login(email, password)
+        if success:
+            st.switch_page("pages/6_Profile.py")
+        else:
+            st.error(msg)

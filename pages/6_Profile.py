@@ -36,21 +36,30 @@ fips_list = list(fips_to_county.keys())
 
 session_init.init_session_state()
 
-# Load user data from Supabase auth
-try:
-    user_response = conn.auth.get_user()
-    if user_response:
-        user = user_response.user
-        user_email = user.email
-        user_id = user.id
-        user_info = {"points": 0, "history": []}  # Custom data not stored in auth; set defaults
-        
-        first_name_default = ''
-        last_name_default = ''
-        location_default = ''
-        bio_default = ''
+import app.auth as auth
 
-        # Fetch profile data
+# Load user data from Session State (via auth module)
+user_info = auth.get_authenticated_user()
+
+if user_info:
+    user_email = user_info['email']
+    user_id = user_info['id']
+    
+    # Custom data not stored in auth; set defaults
+    user_data = {"points": 0, "history": []} # Rename to avoid conflict if user_info name is preferred, but here user_info is from auth.
+    # existing code used user_info for points. I will use user_points_data to be clear?
+    # actually line 46 was: user_info = {"points": 0, "history": []}
+    # I should rename that local variable or my auth variable.
+    # I will rename my auth variable to `authenticated_user`.
+    
+    first_name_default = ''
+    last_name_default = ''
+    location_default = ''
+    bio_default = ''
+    skills_default = ''
+
+    # Fetch profile data
+    try:
         profile_response = conn.table("profiles").select("*").eq("id", user_id).execute()
         if profile_response.data:
             first_name_default = profile_response.data[0].get('first_name', '')
@@ -63,17 +72,22 @@ try:
                 default_idx = fips_list.index(str(location_default))
             except ValueError:
                 default_idx = 0
-    else:
-        st.title("Profile")
-        st.error("User not authenticated, please log in.")
+                
+        # Use a different variable name for the points dictionary
+        user_points_info = {"points": 0, "history": []}
+        
+    except Exception as e:
+        st.error(f"Error fetching profile: {e}")
         st.stop()
-except Exception as e:
-    st.error(f"Error retrieving user: {str(e)}")
+
+else:
+    st.title("Profile")
+    st.error("User not authenticated, please log in.")
     st.stop()
 
 st.header(f"Profile: {user_email}")
 st.subheader(f"Badge: {get_badge(user_email)}")
-st.write(f"Total Points: {user_info.get('points', 0)}")
+st.write(f"Total Points: {user_points_info.get('points', 0)}")
 
 with st.form("update_profile_form"):
     st.markdown("**Personal Information**")
@@ -386,8 +400,5 @@ st.divider()
 col1, col2, col3 = st.columns([1, 1, 2])
 with col1:
     if st.button("Sign Out", key="signout", use_container_width=True):
-        try:
-            conn.auth.sign_out()
-        except:
-            pass
-        sign_out()
+        auth.logout()
+        st.rerun()

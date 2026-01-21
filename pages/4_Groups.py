@@ -4,6 +4,7 @@ from app.common import load_data, save_data, get_badge
 from st_supabase_connection import SupabaseConnection
 import datetime
 import app.initialize as session_init
+import app.auth as auth
 
 st.set_page_config(page_title="Flooding Coordination - Groups", layout="wide")
 
@@ -36,7 +37,8 @@ dm_id = query_params.get("dm_id", None)
 tab1, tab2, tab3 = st.tabs(["Public Chat", "Direct Messages", "Leaderboard"], default="Public Chat" if not dm_id else "Direct Messages")
 
 with tab1:
-    if not st.session_state.get("logged_in"):
+    user_info = auth.get_authenticated_user()
+    if not user_info:
         st.warning("You must be logged in to view and participate in the group chat.")
     else:
         @st.fragment(run_every=2)
@@ -49,7 +51,8 @@ with tab1:
                 except Exception as e:
                     st.error(f"Error fetching messages: {e}")
 
-            current_user_id = st.session_state.get("user_id")
+            user = auth.get_authenticated_user()
+            current_user_id = user['id'] if user else None
 
             with st.container(height=400):
                 for m in messages:
@@ -70,7 +73,8 @@ with tab1:
         show_messages()
 
         if prompt := st.chat_input("Message group..."):
-            current_user_id = st.session_state.get("user_id")
+            user = auth.get_authenticated_user()
+            current_user_id = user['id'] if user else None
             if current_user_id and conn:
                 try:
                     conn.table("messages").insert({
@@ -82,7 +86,8 @@ with tab1:
                     st.error(f"Failed to send message: {e}")
 
 with tab2:
-    me_id = st.session_state.get("user_id")
+    user = auth.get_authenticated_user()
+    me_id = user['id'] if user else None
     if not me_id:
         st.warning("Please sign in.")
     else:
